@@ -1,0 +1,10 @@
+process.env.NODE_ENV = 'test';
+process.env.HOST = '127.0.0.1';
+process.env.PORT = '3000';
+process.env.CORS_ORIGIN = 'http://localhost:5173';
+process.env.INTERNAL_API_KEY = 'test-internal-api-key-32-chars-min';
+process.env.DB_VERIFY_CONNECT_TIMEOUT_MS = '2000';
+process.env.DB_VERIFY_QUERY_TIMEOUT_MS = '2000';
+process.env.THROTTLE_TTL_MS = '60000';
+process.env.THROTTLE_LIMIT = '100';
+process.env.JSON_BODY_LIMIT = '32kb';

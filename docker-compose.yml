@@ -1,0 +1,61 @@
+services:
+  api:
+    image: cb_toolbox-api
+    build: ./backend
+    container_name: cb_toolbox-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      HOST: "0.0.0.0"
+      CORS_ORIGIN: https://${DOMAIN}
+    networks:
+      - internal
+    labels:
+      - traefik.enable=false
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    mem_limit: 512m
+    cpus: 0.75
+
+  web:
+    image: cb_toolbox-app
+    build:
+      context: ./frontend
+      args:
+        # Same-origin /api; nginx proxies to the API and injects INTERNAL_API_KEY.
+        VITE_API_URL: ""
+    container_name: cb_toolbox-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - internal
+      - traefik
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik
+      - "traefik.http.routers.cb_toolbox-web.rule=Host(`${DOMAIN}`)"
+      - traefik.http.routers.cb_toolbox-web.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.cb_toolbox-web.tls=true
+      - traefik.http.routers.cb_toolbox-web.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      - traefik.http.services.cb_toolbox-web.loadbalancer.server.port=80
+    mem_limit: 128m
+    cpus: 0.25
+
+networks:
+  internal:
+  traefik:
+    external: true

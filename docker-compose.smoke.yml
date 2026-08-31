@@ -1,0 +1,40 @@
+services:
+  api:
+    image: cb_toolbox-api
+    build: ./backend
+    environment:
+      NODE_ENV: production
+      HOST: "0.0.0.0"
+      PORT: "3000"
+      CORS_ORIGIN: http://127.0.0.1
+      INTERNAL_API_KEY: test-internal-api-key-32-chars-min
+      DB_VERIFY_CONNECT_TIMEOUT_MS: "2000"
+      DB_VERIFY_QUERY_TIMEOUT_MS: "2000"
+      THROTTLE_TTL_MS: "60000"
+      THROTTLE_LIMIT: "100"
+      JSON_BODY_LIMIT: 32kb
+    networks:
+      - internal
+    restart: "no"
+    mem_limit: 512m
+    cpus: 0.75
+
+  web:
+    image: cb_toolbox-app
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ""
+    environment:
+      INTERNAL_API_KEY: test-internal-api-key-32-chars-min
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - internal
+    restart: "no"
+    mem_limit: 128m
+    cpus: 0.25
+
+networks:
+  internal:

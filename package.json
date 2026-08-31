@@ -1,0 +1,7 @@
+{
+  "name": "toolbox",
+  "private": true,
+  "scripts": {
+    "test:docker": "node scripts/docker-smoke.cjs"
+  }
+}

@@ -1,0 +1,63 @@
+# =============================================================================
+# Toolbox — .gitignore
+# NestJS + React/Vite · Docker Compose + Traefik
+# =============================================================================
+
+# --- Segredos ---------------------------------------------------------------
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# --- Documentacao operacional pessoal ---------------------------------------
+README-ignored.md
+
+# --- Dependencias -----------------------------------------------------------
+node_modules/
+
+# --- Build ------------------------------------------------------------------
+dist/
+dist-ssr/
+build/
+*.tsbuildinfo
+
+# --- Cache ------------------------------------------------------------------
+.vite/
+.cache/
+*.local
+
+# --- Logs -------------------------------------------------------------------
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# --- Testes -----------------------------------------------------------------
+coverage/
+.vitest-cache/
+
+# --- Sistema operacional ----------------------------------------------------
+Desktop.ini
+Thumbs.db
+ehthumbs.db
+$RECYCLE.BIN/
+.DS_Store
+._*
+*~
+
+# --- Editores ---------------------------------------------------------------
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+*.bak
+*.orig
+
+# --- Docker -----------------------------------------------------------------
+docker-compose.override.yml
+docker-compose.local.yml
+secrets/
+*.pid
