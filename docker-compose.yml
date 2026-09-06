@@ -1,8 +1,8 @@
 services:
   api:
-    image: cb_toolbox-api
+    image: bl_toolbox-api
     build: ./backend
-    container_name: cb_toolbox-api
+    container_name: bl_toolbox-api
     restart: unless-stopped
     env_file:
       - .env
@@ -23,13 +23,13 @@ services:
     cpus: 0.75
 
   web:
-    image: cb_toolbox-app
+    image: bl_toolbox-app
     build:
       context: ./frontend
       args:
         # Same-origin /api; nginx proxies to the API and injects INTERNAL_API_KEY.
         VITE_API_URL: ""
-    container_name: cb_toolbox-app
+    container_name: bl_toolbox-app
     restart: unless-stopped
     env_file:
       - .env
@@ -47,11 +47,11 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=traefik
-      - "traefik.http.routers.cb_toolbox-web.rule=Host(`${DOMAIN}`)"
-      - traefik.http.routers.cb_toolbox-web.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
-      - traefik.http.routers.cb_toolbox-web.tls=true
-      - traefik.http.routers.cb_toolbox-web.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
-      - traefik.http.services.cb_toolbox-web.loadbalancer.server.port=80
+      - "traefik.http.routers.bl_toolbox-web.rule=Host(`${DOMAIN}`)"
+      - traefik.http.routers.bl_toolbox-web.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.bl_toolbox-web.tls=true
+      - traefik.http.routers.bl_toolbox-web.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      - traefik.http.services.bl_toolbox-web.loadbalancer.server.port=80
     mem_limit: 128m
     cpus: 0.25
 
