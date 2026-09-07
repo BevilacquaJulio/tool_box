@@ -52,7 +52,7 @@ npm test
 
 ## Fluxo de uso
 
-1. Cole o hash de referencia (ex.: `$2y$10$oSsMTp3D4WfjGaUbRsZmYeOkn7yYhtbOK2lM5WAMGnpg9xB/Z3MXK`)
+1. Cole o hash de referencia (ex.: um hash bcrypt `$2y$10$...`)
 2. Clique em **Identificar tipo**
 3. Informe a senha desejada
 4. Clique em **Gerar novo hash**

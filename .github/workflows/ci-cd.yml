@@ -1,0 +1,154 @@
+name: CI/CD
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cd-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  backend:
+    name: Backend CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run lint, typecheck, tests and build
+        run: npm run ci
+
+  frontend:
+    name: Frontend CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Typecheck and build
+        run: npm run build
+
+  docker-smoke:
+    name: Docker smoke test
+    needs:
+      - backend
+      - frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Validate production Compose
+        run: docker compose --env-file .env.example config --quiet
+
+      - name: Build and test the containers
+        run: npm run test:docker
+
+  deploy:
+    name: Deploy production
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs:
+      - backend
+      - frontend
+      - docker-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: bl-toolbox-production
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: https://toolbox.bevilabs.com.br
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+      VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_KEY }}
+      VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+    steps:
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          : "${VPS_HOST:?Missing VPS_HOST secret}"
+          : "${VPS_USER:?Missing VPS_USER secret}"
+          : "${VPS_APP_DIR:?Missing VPS_APP_DIR secret}"
+          : "${VPS_SSH_PRIVATE_KEY:?Missing VPS_SSH_PRIVATE_KEY secret}"
+          : "${VPS_KNOWN_HOSTS:?Missing VPS_KNOWN_HOSTS secret}"
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+
+      - name: Deploy through SSH
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          port="${VPS_PORT:-22}"
+
+          ssh \
+            -i ~/.ssh/id_ed25519 \
+            -p "$port" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            "VPS_APP_DIR=$VPS_APP_DIR EXPECTED_SHA=$GITHUB_SHA bash -se" <<'REMOTE'
+          set -Eeuo pipefail
+          cd "${VPS_APP_DIR:?Missing VPS_APP_DIR secret}"
+
+          # Bootstrap the first automated deployment, before deploy.sh exists
+          # in the server checkout. Future runs go directly through the script.
+          if [ ! -f scripts/deploy.sh ]; then
+            git pull --ff-only origin main
+          fi
+
+          exec bash scripts/deploy.sh "$EXPECTED_SHA"
+          REMOTE

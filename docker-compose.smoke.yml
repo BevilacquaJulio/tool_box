@@ -1,6 +1,6 @@
 services:
   api:
-    image: cb_toolbox-api
+    image: bl_toolbox-api
     build: ./backend
     environment:
       NODE_ENV: production
@@ -20,7 +20,7 @@ services:
     cpus: 0.75
 
   web:
-    image: cb_toolbox-app
+    image: bl_toolbox-app
     build:
       context: ./frontend
       args:
