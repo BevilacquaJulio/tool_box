@@ -138,8 +138,37 @@ jobs:
 
           install -m 700 -d ~/.ssh
           printf '%s\n' "$VPS_SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_ed25519
-          printf '%s\n' "$VPS_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
+
+          # Keep only the pinned ED25519 key from the secret and rebuild the
+          # host field from the exact host/port used by this workflow. This
+          # avoids mismatches such as IP vs. hostname or a non-default port.
+          host_key="$(
+            printf '%s\n' "$VPS_KNOWN_HOSTS" \
+              | tr -d '\r' \
+              | awk '
+                  $0 !~ /^#/ {
+                    for (i = 1; i <= NF; i++) {
+                      if ($i == "ssh-ed25519" && (i + 1) <= NF) {
+                        print $i " " $(i + 1)
+                        exit
+                      }
+                    }
+                  }
+                '
+          )"
+          : "${host_key:?VPS_KNOWN_HOSTS does not contain an ED25519 public key}"
+
+          port="${VPS_PORT:-22}"
+          known_host="$VPS_HOST"
+          if [[ "$port" != "22" ]]; then
+            known_host="[$VPS_HOST]:$port"
+          fi
+
+          printf '%s %s\n' "$known_host" "$host_key" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+
+          ssh-keygen -y -f ~/.ssh/id_ed25519 > /dev/null
+          ssh-keygen -F "$known_host" -f ~/.ssh/known_hosts > /dev/null
 
       - name: Deploy through SSH
         shell: bash

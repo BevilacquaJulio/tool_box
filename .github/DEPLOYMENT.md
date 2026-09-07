@@ -31,6 +31,11 @@ Configure em **Settings > Secrets and variables > Actions**:
 - `VPS_SSH_KEY`: chave privada exclusiva do GitHub Actions;
 - `VPS_KNOWN_HOSTS`: linha da chave pública do host SSH já confiada.
 
+O workflow extrai a chave `ssh-ed25519` de `VPS_KNOWN_HOSTS` e monta
+automaticamente o identificador usando `VPS_HOST` e `VPS_PORT`. Assim, o secret
+pode conter a linha completa produzida pelo `ssh-keyscan`, inclusive quando ela
+usa outro nome ou IP antes da chave; a identidade criptográfica continua fixa.
+
 Para obter `VPS_KNOWN_HOSTS` de uma máquina que já confia na VPS:
 
 ```bash
