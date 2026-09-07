@@ -16,6 +16,10 @@ O GitHub Actions **não lê** o `.env` da sua máquina nem o da VPS. O runner ro
 na nuvem do GitHub e precisa dos secrets para conectar via SSH. Na VPS, o
 `scripts/deploy.sh` usa o `.env` local para validar o deploy (`DOMAIN`, etc.).
 
+Durante o smoke test, o workflow copia `.env.example` para um `.env` temporário
+no runner. Esse arquivo contém apenas placeholders, existe somente durante o job
+e é descartado com a máquina efêmera do GitHub Actions.
+
 ## Secrets do GitHub
 
 Configure em **Settings > Secrets and variables > Actions**:

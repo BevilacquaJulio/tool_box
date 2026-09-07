@@ -9,9 +9,6 @@ on:
       - main
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 concurrency:
   group: ci-cd-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -21,6 +18,8 @@ jobs:
     name: Backend CI
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: backend
@@ -36,15 +35,22 @@ jobs:
           cache-dependency-path: backend/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Run lint, typecheck, tests and build
-        run: npm run ci
+        run: |
+          npm run lint
+          npm run typecheck
+          npm test
+          npm run test:e2e
+          npm run build
 
   frontend:
     name: Frontend CI
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: frontend
@@ -60,7 +66,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Run tests
         run: npm test
@@ -75,6 +81,8 @@ jobs:
       - frontend
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -84,8 +92,11 @@ jobs:
         with:
           node-version: 24
 
+      - name: Prepare CI environment
+        run: cp .env.example .env
+
       - name: Validate production Compose
-        run: docker compose --env-file .env.example config --quiet
+        run: docker compose config --quiet
 
       - name: Build and test the containers
         run: npm run test:docker
@@ -99,6 +110,8 @@ jobs:
       - docker-smoke
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     concurrency:
       group: bl-toolbox-production
       cancel-in-progress: false
