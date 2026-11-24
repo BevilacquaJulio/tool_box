@@ -27,8 +27,12 @@ const BLOCKED_HOSTS = new Set([
 ]);
 
 export function normalizeHost(rawHost: string): string {
-  const trimmed = rawHost.trim().toLowerCase();
-  return trimmed.endsWith('.') ? trimmed.slice(0, -1) : trimmed;
+  let host = rawHost.trim().toLowerCase();
+  // IPv6 costuma ser colado entre colchetes ([::1]); o driver espera o endereço puro.
+  if (host.startsWith('[') && host.endsWith(']')) {
+    host = host.slice(1, -1);
+  }
+  return host.endsWith('.') ? host.slice(0, -1) : host;
 }
 
 export function isBlockedIp(ip: string): boolean {
@@ -82,6 +86,10 @@ export function assertAllowedHost(host: string): void {
       throw new Error('Host nao permitido para teste de conexao.');
     }
     return;
+  }
+
+  if (/^[a-z0-9._-]+:\d+$/.test(normalized)) {
+    throw new Error('Informe um host valido, sem a porta: use o campo Porta.');
   }
 
   if (!/^[a-z0-9._-]+$/.test(normalized)) {
@@ -144,6 +152,38 @@ export function classifyConnectionError(error: unknown): DbVerifyErrorDetails {
     };
   }
 
+  if (code === 'EAI_AGAIN') {
+    return {
+      type: 'host',
+      label: DB_VERIFY_ERROR_LABELS.host,
+      message: 'Falha temporaria de DNS ao resolver o host. Tente novamente ou use o IP.',
+    };
+  }
+
+  if (code === 'EHOSTUNREACH' || code === 'ENETUNREACH') {
+    return {
+      type: 'port',
+      label: DB_VERIFY_ERROR_LABELS.port,
+      message: 'Host inalcancavel a partir do servidor da ferramenta. Verifique rede, VPN e firewall.',
+    };
+  }
+
+  if (code === 'ECONNRESET' || code === 'PROTOCOL_CONNECTION_LOST' || code === 'PROTOCOL_PACKETS_OUT_OF_ORDER') {
+    return {
+      type: 'port',
+      label: DB_VERIFY_ERROR_LABELS.port,
+      message: 'O servidor encerrou a conexao. Confira se a porta e de um MySQL/MariaDB e se exige TLS.',
+    };
+  }
+
+  if (code === 'PROTOCOL_SEQUENCE_TIMEOUT') {
+    return {
+      type: 'timeout',
+      label: DB_VERIFY_ERROR_LABELS.timeout,
+      message: 'O servidor nao respondeu a tempo. Pode estar sobrecarregado ou a porta nao ser de um MySQL.',
+    };
+  }
+
   if (code === 'ETIMEDOUT' || code === 'ECONNABORTED') {
     return {
       type: 'timeout',
@@ -168,6 +208,23 @@ export function classifyConnectionError(error: unknown): DbVerifyErrorDetails {
     };
   }
 
+  if (mysqlCode === 1698) {
+    return {
+      type: 'credentials',
+      label: DB_VERIFY_ERROR_LABELS.credentials,
+      message:
+        'Acesso negado: este usuario autentica por socket do sistema (auth_socket/unix_socket) e nao aceita senha via rede. Use outro usuario.',
+    };
+  }
+
+  if (mysqlCode === 1251) {
+    return {
+      type: 'credentials',
+      label: DB_VERIFY_ERROR_LABELS.credentials,
+      message: 'O servidor exige um plugin de autenticacao que o cliente nao suporta para este usuario.',
+    };
+  }
+
   if (mysqlCode === 1049) {
     return {
       type: 'database',
@@ -189,6 +246,30 @@ export function classifyConnectionError(error: unknown): DbVerifyErrorDetails {
       type: 'permission',
       label: DB_VERIFY_ERROR_LABELS.permission,
       message: 'Host do cliente nao autorizado a conectar neste servidor MySQL.',
+    };
+  }
+
+  if (mysqlCode === 1129) {
+    return {
+      type: 'permission',
+      label: DB_VERIFY_ERROR_LABELS.permission,
+      message: 'Host do cliente bloqueado por excesso de erros de conexao. O DBA precisa rodar FLUSH HOSTS.',
+    };
+  }
+
+  if (mysqlCode === 3159) {
+    return {
+      type: 'permission',
+      label: DB_VERIFY_ERROR_LABELS.permission,
+      message: 'O servidor so aceita conexoes com TLS e a negociacao segura falhou.',
+    };
+  }
+
+  if (mysqlCode === 1040) {
+    return {
+      type: 'unknown',
+      label: DB_VERIFY_ERROR_LABELS.unknown,
+      message: 'O servidor atingiu o limite de conexoes (max_connections). Tente novamente depois.',
     };
   }
 

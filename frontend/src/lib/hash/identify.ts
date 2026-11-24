@@ -1,32 +1,47 @@
-import type { HashAlgorithm, HashIdentification } from './types';
+import type { HashAlgorithm, HashIdentification, HashSecurityLevel } from './types';
 
 const phpassAlphabet = './0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+
+// Base64 padrão e "adapted base64" do passlib (usa "." no lugar de "+").
+const B64 = '[A-Za-z0-9+/.]';
 
 function phpassCostFromChar(char: string): number {
   return phpassAlphabet.indexOf(char);
 }
 
-function simpleDigest(
-  algorithm: HashAlgorithm,
-  length: number,
-): HashIdentification {
-  const labels: Record<string, string> = {
-    md5: 'MD5',
-    sha1: 'SHA-1',
-    sha256: 'SHA-256',
-    sha512: 'SHA-512',
-  };
+const digestLabels: Record<string, string> = {
+  md5: 'MD5',
+  sha1: 'SHA-1',
+  sha224: 'SHA-224',
+  sha256: 'SHA-256',
+  sha384: 'SHA-384',
+  sha512: 'SHA-512',
+};
+
+// Hex puro não carrega o algoritmo: o tamanho só indica os candidatos.
+const sameLengthDigests: Record<number, string> = {
+  32: 'NTLM, MD4, LM, RIPEMD-128',
+  40: 'RIPEMD-160, MySQL 4.1+ sem o "*"',
+  56: 'SHA3-224, SHA-512/224',
+  64: 'SHA3-256, Keccak-256, BLAKE2s-256, SHA-512/256',
+  96: 'SHA3-384',
+  128: 'SHA3-512, BLAKE2b-512, Whirlpool',
+};
+
+function simpleDigest(algorithm: HashAlgorithm, length: number): HashIdentification {
+  const label = digestLabels[algorithm] ?? algorithm;
 
   return {
     algorithm,
-    label: labels[algorithm] ?? algorithm,
-    description: `Digest ${labels[algorithm]} sem salt. Não é um hashing seguro de senha.`,
+    label,
+    description: `Digest ${label} sem salt. Não é um hashing seguro de senha.`,
     securityLevel: 'insecure',
     params: { hashLength: length },
     format: `[${length} caracteres hex]`,
     canGenerate: true,
     warnings: [
-      `${labels[algorithm]} não deve ser usado para armazenar senhas. Apenas para compatibilidade legada.`,
+      `${label} não deve ser usado para armazenar senhas. Apenas para compatibilidade legada.`,
+      `Mesmo tamanho de: ${sameLengthDigests[length]}. Confirme a origem do hash; o mais comum foi assumido.`,
     ],
   };
 }
@@ -62,14 +77,15 @@ function detectBcrypt(hash: string): HashIdentification | null {
 }
 
 function detectArgon2(hash: string): HashIdentification | null {
+  // Salt e hash têm tamanho configurável; hashes antigos (v1.0) não têm "v=".
   const match = hash.match(
-    /^\$argon2(id|i|d)\$v=(\d+)\$m=(\d+),t=(\d+),p=(\d+)\$([A-Za-z0-9+/]{22})\$([A-Za-z0-9+/]{43})$/,
+    /^\$argon2(id|i|d)\$(?:v=(\d+)\$)?m=(\d+),t=(\d+),p=(\d+)\$([A-Za-z0-9+/]+)\$([A-Za-z0-9+/]+)$/,
   );
   if (!match) {
     return null;
   }
 
-  const [, variant, , memoryCost, timeCost, parallelism] = match;
+  const [, variant, version, memoryCost, timeCost, parallelism] = match;
   const variantNames: Record<string, string> = {
     id: 'Argon2id',
     i: 'Argon2i',
@@ -87,15 +103,15 @@ function detectArgon2(hash: string): HashIdentification | null {
       timeCost: Number(timeCost),
       parallelism: Number(parallelism),
     },
-    format: `$argon2${variant}$v=19$m=...,t=...,p=...[salt][hash]`,
+    format: `$argon2${variant}$v=${version ?? '16'}$m=...,t=...,p=...[salt][hash]`,
     canGenerate: true,
-    warnings: [],
+    warnings: version ? [] : ['Hash sem "v=" (Argon2 1.0). O novo hash será gerado na versão 1.3 (v=19).'],
   };
 }
 
 function detectScrypt(hash: string): HashIdentification | null {
   const match = hash.match(
-    /^\$scrypt\$ln=(\d+),r=(\d+),p=(\d+)\$([A-Za-z0-9+/]{22,44})\$([A-Za-z0-9+/]{22,44})$/,
+    new RegExp(`^\\$scrypt\\$ln=(\\d+),r=(\\d+),p=(\\d+)\\$(${B64}+)\\$(${B64}+)$`),
   );
   if (!match) {
     return null;
@@ -127,62 +143,42 @@ function detectPhpass(hash: string): HashIdentification | null {
 
   const [, type, costChar] = match;
   const cost = phpassCostFromChar(costChar);
-  const isBcrypt = type === 'H';
 
+  // $H$ é só o prefixo do phpBB3 para o mesmo algoritmo portable MD5 do $P$.
   return {
     algorithm: 'phpass',
-    label: isBcrypt ? 'phpass (bcrypt)' : 'phpass (portable MD5)',
-    description: isBcrypt
-      ? 'WordPress phpass usando bcrypt como backend.'
-      : 'Hash portable baseado em MD5. Comum em WordPress antigo.',
-    securityLevel: isBcrypt ? 'strong' : 'weak',
+    label: type === 'H' ? 'phpass (phpBB3 $H$)' : 'phpass (WordPress $P$)',
+    description: 'Hash portable do phpass baseado em MD5 iterado. Comum em WordPress e phpBB.',
+    securityLevel: 'weak',
     params: { variant: type, cost },
     format: `$${type}$[cost][salt][hash]`,
     canGenerate: true,
-    warnings: isBcrypt
-      ? []
-      : ['phpass portable usa MD5 iterado. Considere migrar para bcrypt ou Argon2.'],
+    warnings: ['phpass portable usa MD5 iterado. Considere migrar para bcrypt ou Argon2.'],
   };
 }
 
 function detectPbkdf2(hash: string): HashIdentification | null {
-  const sha256 = hash.match(
-    /^\$pbkdf2-sha256\$(\d+)\$([A-Za-z0-9+/=]{22,44})\$([A-Za-z0-9+/=]{22,64})$/,
+  const match = hash.match(
+    new RegExp(`^\\$pbkdf2-(sha256|sha512)\\$(\\d+)\\$(${B64}+=*)\\$(${B64}+=*)$`),
   );
-  if (sha256) {
-    const [, iterations] = sha256;
-    const iter = Number(iterations);
-    return {
-      algorithm: 'pbkdf2-sha256',
-      label: 'PBKDF2-SHA256',
-      description: 'PBKDF2 com SHA-256. Formato modular crypt.',
-      securityLevel: iter >= 100_000 ? 'strong' : iter >= 10_000 ? 'moderate' : 'weak',
-      params: { iterations: iter },
-      format: '$pbkdf2-sha256$[iterations]$[salt]$[hash]',
-      canGenerate: true,
-      warnings: [],
-    };
+  if (!match) {
+    return null;
   }
 
-  const sha512 = hash.match(
-    /^\$pbkdf2-sha512\$(\d+)\$([A-Za-z0-9+/=]{22,44})\$([A-Za-z0-9+/=]{22,128})$/,
-  );
-  if (sha512) {
-    const [, iterations] = sha512;
-    const iter = Number(iterations);
-    return {
-      algorithm: 'pbkdf2-sha512',
-      label: 'PBKDF2-SHA512',
-      description: 'PBKDF2 com SHA-512. Formato modular crypt.',
-      securityLevel: iter >= 100_000 ? 'strong' : iter >= 10_000 ? 'moderate' : 'weak',
-      params: { iterations: iter },
-      format: '$pbkdf2-sha512$[iterations]$[salt]$[hash]',
-      canGenerate: true,
-      warnings: [],
-    };
-  }
+  const [, digest, iterations] = match;
+  const iter = Number(iterations);
+  const label = digest === 'sha512' ? 'PBKDF2-SHA512' : 'PBKDF2-SHA256';
 
-  return null;
+  return {
+    algorithm: digest === 'sha512' ? 'pbkdf2-sha512' : 'pbkdf2-sha256',
+    label,
+    description: `PBKDF2 com ${digest === 'sha512' ? 'SHA-512' : 'SHA-256'}. Formato modular crypt (passlib).`,
+    securityLevel: iter >= 100_000 ? 'strong' : iter >= 10_000 ? 'moderate' : 'weak',
+    params: { iterations: iter },
+    format: `$pbkdf2-${digest}$[iterations]$[salt]$[hash]`,
+    canGenerate: true,
+    warnings: [],
+  };
 }
 
 function detectDjangoPbkdf2(hash: string): HashIdentification | null {
@@ -206,6 +202,181 @@ function detectDjangoPbkdf2(hash: string): HashIdentification | null {
   };
 }
 
+function detectMysql41(hash: string): HashIdentification | null {
+  if (!/^\*[A-F0-9]{40}$/i.test(hash)) {
+    return null;
+  }
+
+  return {
+    algorithm: 'mysql41',
+    label: 'MySQL 4.1+ (mysql_native_password)',
+    description: 'SHA-1 duplo usado pelo plugin mysql_native_password do MySQL/MariaDB.',
+    securityLevel: 'insecure',
+    params: {},
+    format: '*[40 caracteres hex maiúsculos]',
+    canGenerate: true,
+    warnings: ['Sem salt: o mesmo valor gera sempre o mesmo hash. Prefira caching_sha2_password.'],
+  };
+}
+
+type KnownFormat = {
+  pattern: RegExp;
+  algorithm: HashAlgorithm;
+  label: string;
+  description: string;
+  securityLevel: HashSecurityLevel;
+  format: string;
+};
+
+// Formatos reconhecidos sem gerador implementado. A ordem importa: prefixos específicos antes dos genéricos.
+const identifyOnlyFormats: KnownFormat[] = [
+  {
+    pattern: /^\$1\$[^$]{0,8}\$[./0-9A-Za-z]{22}$/,
+    algorithm: 'md5-crypt',
+    label: 'MD5-crypt ($1$)',
+    description: 'crypt() baseado em MD5. Comum em /etc/shadow antigo, Cisco IOS e FreeBSD.',
+    securityLevel: 'weak',
+    format: '$1$[salt]$[hash]',
+  },
+  {
+    pattern: /^\$apr1\$[^$]{0,8}\$[./0-9A-Za-z]{22}$/,
+    algorithm: 'md5-crypt',
+    label: 'Apache MD5 ($apr1$)',
+    description: 'Variante do MD5-crypt usada pelo htpasswd do Apache.',
+    securityLevel: 'weak',
+    format: '$apr1$[salt]$[hash]',
+  },
+  {
+    pattern: /^\$5\$(?:rounds=\d+\$)?[^$]{0,16}\$[./0-9A-Za-z]{43}$/,
+    algorithm: 'sha256-crypt',
+    label: 'SHA256-crypt ($5$)',
+    description: 'crypt() baseado em SHA-256 (glibc). Usado em /etc/shadow.',
+    securityLevel: 'moderate',
+    format: '$5$[rounds=N$][salt]$[hash]',
+  },
+  {
+    pattern: /^\$6\$(?:rounds=\d+\$)?[^$]{0,16}\$[./0-9A-Za-z]{86}$/,
+    algorithm: 'sha512-crypt',
+    label: 'SHA512-crypt ($6$)',
+    description: 'crypt() baseado em SHA-512 (glibc). Padrão antigo do /etc/shadow no Linux.',
+    securityLevel: 'moderate',
+    format: '$6$[rounds=N$][salt]$[hash]',
+  },
+  {
+    pattern: /^\$(?:y|gy|7)\$[./0-9A-Za-z]+\$[./0-9A-Za-z]*\$?[./0-9A-Za-z]{43}$/,
+    algorithm: 'yescrypt',
+    label: 'yescrypt / scrypt do libxcrypt ($y$, $7$)',
+    description: 'Padrão atual do /etc/shadow no Debian, Ubuntu e Fedora ($y$); $7$ é o scrypt do libxcrypt.',
+    securityLevel: 'strong',
+    format: '$y$[params]$[salt]$[hash]',
+  },
+  {
+    pattern: /^\$bcrypt-sha256\$/,
+    algorithm: 'bcrypt-sha256',
+    label: 'bcrypt-sha256 (passlib)',
+    description: 'bcrypt aplicado sobre SHA-256 da senha, para aceitar senhas acima de 72 bytes.',
+    securityLevel: 'strong',
+    format: '$bcrypt-sha256$v=2,t=2b,r=[cost]$[salt]$[hash]',
+  },
+  {
+    pattern: new RegExp(`^\\$pbkdf2\\$\\d+\\$${B64}+\\$${B64}+$`),
+    algorithm: 'pbkdf2-sha1',
+    label: 'PBKDF2-SHA1 (passlib)',
+    description: 'PBKDF2 com HMAC-SHA1 no formato modular crypt do passlib.',
+    securityLevel: 'moderate',
+    format: '$pbkdf2$[iterations]$[salt]$[hash]',
+  },
+  {
+    pattern: /^\$S\$[./0-9A-Za-z]{52}$/,
+    algorithm: 'drupal7',
+    label: 'Drupal 7 ($S$)',
+    description: 'Variante do phpass com SHA-512 usada pelo Drupal 7.',
+    securityLevel: 'moderate',
+    format: '$S$[cost][salt][hash]',
+  },
+  {
+    pattern: /^\$8\$[./0-9A-Za-z]{14}\$[./0-9A-Za-z]{43}$/,
+    algorithm: 'cisco',
+    label: 'Cisco tipo 8 ($8$)',
+    description: 'PBKDF2-SHA256 usado em senhas "secret 8" do Cisco IOS.',
+    securityLevel: 'strong',
+    format: '$8$[salt]$[hash]',
+  },
+  {
+    pattern: /^\$9\$[./0-9A-Za-z]{14}\$[./0-9A-Za-z]{43}$/,
+    algorithm: 'cisco',
+    label: 'Cisco tipo 9 ($9$)',
+    description: 'scrypt usado em senhas "secret 9" do Cisco IOS.',
+    securityLevel: 'strong',
+    format: '$9$[salt]$[hash]',
+  },
+  {
+    pattern:
+      /^(?:pbkdf2_sha1|bcrypt_sha256|bcrypt|argon2|scrypt|sha1|md5|unsalted_md5|unsalted_sha1|crypt)\$/,
+    algorithm: 'django',
+    label: 'Django (outro hasher)',
+    description: 'Formato "<algoritmo>$..." dos hashers de senha do Django.',
+    securityLevel: 'moderate',
+    format: '<algoritmo>$[parâmetros]$[salt]$[hash]',
+  },
+  {
+    pattern: /^(?:pbkdf2:(?:sha1|sha256|sha512)(?::\d+)?|scrypt:\d+:\d+:\d+)\$[^$]+\$[a-f0-9]+$/,
+    algorithm: 'werkzeug',
+    label: 'Werkzeug / Flask',
+    description: 'Formato de generate_password_hash do Werkzeug (Flask).',
+    securityLevel: 'strong',
+    format: 'pbkdf2:sha256:[iterations]$[salt]$[hash hex]',
+  },
+  {
+    pattern: /^\{(?:SSHA512|SSHA256|SSHA|SHA512|SHA256|SHA|SMD5|MD5|CRYPT|PBKDF2(?:-SHA\d+)?|ARGON2)\}/i,
+    algorithm: 'ldap',
+    label: 'LDAP ({esquema})',
+    description: 'Senha no formato userPassword do LDAP (OpenLDAP, 389-DS).',
+    securityLevel: 'weak',
+    format: '{ESQUEMA}[base64]',
+  },
+  {
+    pattern: /^[a-f0-9]{16}$/i,
+    algorithm: 'mysql323',
+    label: 'MySQL 3.23 (OLD_PASSWORD)',
+    description: 'Hash legado do MySQL anterior à 4.1. Também pode ser um CRC-64 ou meio LM.',
+    securityLevel: 'insecure',
+    format: '[16 caracteres hex]',
+  },
+];
+
+function detectIdentifyOnly(hash: string): HashIdentification | null {
+  const known = identifyOnlyFormats.find(({ pattern }) => pattern.test(hash));
+  if (!known) {
+    return null;
+  }
+
+  const { pattern: _pattern, ...rest } = known;
+  return {
+    ...rest,
+    params: {},
+    canGenerate: false,
+    warnings: ['Formato identificado, mas a geração de um novo hash ainda não é suportada aqui.'],
+  };
+}
+
+const hexDigests: Array<[number, HashAlgorithm]> = [
+  [128, 'sha512'],
+  [96, 'sha384'],
+  [64, 'sha256'],
+  [56, 'sha224'],
+  [40, 'sha1'],
+  [32, 'md5'],
+];
+
+function detectHexDigest(hash: string): HashIdentification | null {
+  if (!/^[a-f0-9]+$/i.test(hash)) {
+    return null;
+  }
+  const digest = hexDigests.find(([length]) => length === hash.length);
+  return digest ? simpleDigest(digest[1], digest[0]) : null;
+}
+
 const detectors: Array<(value: string) => HashIdentification | null> = [
   detectBcrypt,
   detectArgon2,
@@ -213,10 +384,9 @@ const detectors: Array<(value: string) => HashIdentification | null> = [
   detectPhpass,
   detectPbkdf2,
   detectDjangoPbkdf2,
-  (hash) => (/^[a-f0-9]{128}$/i.test(hash) ? simpleDigest('sha512', 128) : null),
-  (hash) => (/^[a-f0-9]{64}$/i.test(hash) ? simpleDigest('sha256', 64) : null),
-  (hash) => (/^[a-f0-9]{40}$/i.test(hash) ? simpleDigest('sha1', 40) : null),
-  (hash) => (/^[a-f0-9]{32}$/i.test(hash) ? simpleDigest('md5', 32) : null),
+  detectMysql41,
+  detectIdentifyOnly,
+  detectHexDigest,
 ];
 
 export function identifyHash(rawHash: string): HashIdentification {

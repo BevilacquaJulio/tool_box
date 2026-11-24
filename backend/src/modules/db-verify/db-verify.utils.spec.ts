@@ -1,4 +1,10 @@
-import { assertAllowedHost, classifyConnectionError, isBlockedIp, sanitizeDatabaseName } from './db-verify.utils';
+import {
+  assertAllowedHost,
+  classifyConnectionError,
+  isBlockedIp,
+  normalizeHost,
+  sanitizeDatabaseName,
+} from './db-verify.utils';
 
 describe('db-verify.utils', () => {
   it('rejects blocked cloud metadata hosts', () => {
@@ -46,6 +52,32 @@ describe('db-verify.utils', () => {
   it('does not leak unknown driver messages', () => {
     const error = new Error('Table `users` does not exist at /var/lib/mysql');
     expect(classifyConnectionError(error).message).toBe('Falha ao validar a conexao com o banco.');
+  });
+
+  it('explains host:port instead of a generic invalid host', () => {
+    expect(() => assertAllowedHost('db.exemplo.com:3307')).toThrow(/campo porta/i);
+  });
+
+  it('accepts bracketed IPv6 literals', () => {
+    expect(normalizeHost('[::1]')).toBe('::1');
+    expect(() => assertAllowedHost('[::1]')).not.toThrow();
+  });
+
+  it.each([
+    [{ code: 'EHOSTUNREACH' }, 'port'],
+    [{ code: 'ENETUNREACH' }, 'port'],
+    [{ code: 'ECONNRESET' }, 'port'],
+    [{ code: 'EAI_AGAIN' }, 'host'],
+    [{ code: 'PROTOCOL_SEQUENCE_TIMEOUT' }, 'timeout'],
+    [{ errno: 1698 }, 'credentials'],
+    [{ errno: 1251 }, 'credentials'],
+    [{ errno: 1129 }, 'permission'],
+    [{ errno: 3159 }, 'permission'],
+    [{ errno: 1040 }, 'unknown'],
+  ])('classifies %o as %s with a specific message', (props, type) => {
+    const result = classifyConnectionError(Object.assign(new Error('driver detail'), props));
+    expect(result.type).toBe(type);
+    expect(result.message).not.toBe('Falha ao validar a conexao com o banco.');
   });
 
   it('sanitizes database names', () => {

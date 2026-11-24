@@ -1,6 +1,6 @@
 import { md5 } from '@noble/hashes/legacy.js';
 import bcrypt from 'bcryptjs';
-import { argon2d, argon2i, argon2id, md5 as md5Hex, scrypt } from 'hash-wasm';
+import { argon2d, argon2i, argon2id, md5 as md5Hex, scrypt, sha1, sha224 } from 'hash-wasm';
 import type { GenerateHashResult, HashIdentification, HashParams } from './types';
 import { HashError } from './types';
 import { identifyHash } from './identify';
@@ -52,9 +52,16 @@ async function pbkdf2Derive(
   return new Uint8Array(bits);
 }
 
-async function digestHex(algorithm: 'MD5' | 'SHA-1' | 'SHA-256' | 'SHA-512', password: string) {
+async function digestHex(
+  algorithm: 'MD5' | 'SHA-1' | 'SHA-224' | 'SHA-256' | 'SHA-384' | 'SHA-512',
+  password: string,
+) {
+  // Web Crypto não tem MD5 nem SHA-224.
   if (algorithm === 'MD5') {
     return md5Hex(password);
+  }
+  if (algorithm === 'SHA-224') {
+    return sha224(password);
   }
 
   const enc = new TextEncoder();
@@ -77,42 +84,51 @@ function randomPhpassSalt(length: number): string {
   return salt;
 }
 
-function md5Binary(input: string): string {
-  const bytes = md5(new TextEncoder().encode(input));
-  return String.fromCharCode(...bytes);
+function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
+  const out = new Uint8Array(a.length + b.length);
+  out.set(a);
+  out.set(b, a.length);
+  return out;
 }
 
-function encode64(input: string, count: number): string {
+// Porta literal do encode64 do phpass (PasswordHash.php).
+function encode64(input: Uint8Array, count: number): string {
   const itoa64 = './0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
   let output = '';
   let i = 0;
 
   do {
-    let value = input.charCodeAt(i++);
+    let value = input[i++];
     output += itoa64[value & 0x3f];
-    value >>= 6;
     if (i < count) {
-      value |= input.charCodeAt(i) << 16;
+      value |= input[i] << 8;
     }
-    output += itoa64[value & 0x3f];
-    value >>= 6;
+    output += itoa64[(value >> 6) & 0x3f];
+    if (i++ >= count) {
+      break;
+    }
     if (i < count) {
-      value |= input.charCodeAt(i) << 8;
+      value |= input[i] << 16;
     }
-    output += itoa64[value & 0x3f];
-    value >>= 6;
-    output += itoa64[value & 0x3f];
+    output += itoa64[(value >> 12) & 0x3f];
+    if (i++ >= count) {
+      break;
+    }
+    output += itoa64[(value >> 18) & 0x3f];
   } while (i < count);
 
   return output;
 }
 
-function phpassPortableHash(password: string, salt: string, countLog2: number): string {
-  let hash = md5Binary(salt + password);
+// O MD5 é encadeado em bytes crus; converter para string reencodaria bytes >= 0x80 em UTF-8.
+export function phpassPortableHash(password: string, salt: string, countLog2: number): string {
+  const enc = new TextEncoder();
+  const pw = enc.encode(password);
+  let hash = md5(concatBytes(enc.encode(salt), pw));
   let count = 1 << countLog2;
 
   do {
-    hash = md5Binary(hash + password);
+    hash = md5(concatBytes(hash, pw));
   } while (--count);
 
   return encode64(hash, 16);
@@ -212,30 +228,17 @@ async function generatePhpass(
   identification: HashIdentification,
   params: HashParams,
 ): Promise<GenerateHashResult> {
-  const type = params.variant ?? 'P';
-  const cost = params.cost ?? 10;
-
-  if (type === 'H') {
-    const hash = await bcrypt.hash(password, Math.min(Math.max(cost, 4), 31));
-    const phpassHash = `$H$${phpassCostChar(cost)}${hash.slice(4)}`;
-
-    return {
-      hash: phpassHash,
-      algorithm: 'phpass',
-      label: identification.label,
-      params: { variant: 'H', cost },
-      warnings: identification.warnings,
-    };
-  }
-
+  // $P$ (WordPress) e $H$ (phpBB3) são o mesmo algoritmo; só o prefixo muda.
+  const type = params.variant === 'H' ? 'H' : 'P';
+  const cost = params.cost ?? 8;
   const salt = randomPhpassSalt(8);
   const portable = phpassPortableHash(password, salt, cost);
 
   return {
-    hash: `$P$${phpassCostChar(cost)}${salt}${portable}`,
+    hash: `$${type}$${phpassCostChar(cost)}${salt}${portable}`,
     algorithm: 'phpass',
     label: identification.label,
-    params: { variant: 'P', cost },
+    params: { variant: type, cost },
     warnings: identification.warnings,
   };
 }
@@ -288,7 +291,9 @@ async function generateDigest(
   const algoMap = {
     md5: 'MD5',
     sha1: 'SHA-1',
+    sha224: 'SHA-224',
     sha256: 'SHA-256',
+    sha384: 'SHA-384',
     sha512: 'SHA-512',
   } as const;
 
@@ -300,6 +305,23 @@ async function generateDigest(
     algorithm: identification.algorithm,
     label: identification.label,
     params: identification.params,
+    warnings: identification.warnings,
+  };
+}
+
+async function generateMysql41(
+  password: string,
+  identification: HashIdentification,
+): Promise<GenerateHashResult> {
+  // mysql_native_password: "*" + SHA1(SHA1(senha) em bytes), em hex maiúsculo.
+  const inner = await sha1(password);
+  const outer = await sha1(new Uint8Array(inner.match(/.{2}/g)!.map((h) => Number.parseInt(h, 16))));
+
+  return {
+    hash: `*${outer.toUpperCase()}`,
+    algorithm: 'mysql41',
+    label: identification.label,
+    params: {},
     warnings: identification.warnings,
   };
 }
@@ -336,9 +358,13 @@ export async function generateHash(
       return generatePbkdf2(password, identification, params, 'SHA-512');
     case 'django-pbkdf2-sha256':
       return generateDjangoPbkdf2(password, identification, params);
+    case 'mysql41':
+      return generateMysql41(password, identification);
     case 'md5':
     case 'sha1':
+    case 'sha224':
     case 'sha256':
+    case 'sha384':
     case 'sha512':
       return generateDigest(password, identification);
     default:

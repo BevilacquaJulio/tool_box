@@ -1,3 +1,4 @@
+import { blocksToText, htmlToBlocks } from './blocks';
 import type { ConvertedDocumentFile } from './types';
 
 export function buildBaseName(fileName: string): string {
@@ -32,12 +33,17 @@ export function createBinaryConvertedFile(
   };
 }
 
+export function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 export function wrapHtmlDocument(title: string, body: string): string {
+  // O título vem do nome do arquivo: escapado para não injetar marcação no <head>.
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <title>${title}</title>
+  <title>${escapeHtml(title)}</title>
 </head>
 <body>
 ${body}
@@ -46,6 +52,5 @@ ${body}
 }
 
 export function htmlToPlainText(html: string): string {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  return (doc.body.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim();
+  return blocksToText(htmlToBlocks(html));
 }

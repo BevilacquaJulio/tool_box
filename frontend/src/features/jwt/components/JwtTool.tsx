@@ -4,15 +4,36 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Button } from '../../../components/Button';
 import { CopyField } from '../../../components/CopyField';
-import { Select } from '../../../components/Input';
+import { Input, Select } from '../../../components/Input';
 import { getErrorMessage } from '../../../lib/errors';
-import { HMAC_ALGORITHMS, JWT_WEIGHTS } from '../../../lib/jwt';
+import {
+  DEFAULT_SECRET_LENGTH,
+  HMAC_ALGORITHMS,
+  JWT_WEIGHTS,
+  MAX_SECRET_LENGTH,
+  MIN_SECRET_LENGTH,
+} from '../../../lib/jwt';
 import { TOOL_GRID_CLASS } from '../../../layout/content';
 import { useGenerateRandomJwtMutation } from '../hooks/useJwtMutations';
 
-const formSchema = z.object({
-  algorithm: z.enum(HMAC_ALGORITHMS),
-});
+const formSchema = z
+  .object({
+    algorithm: z.enum(HMAC_ALGORITHMS),
+    secretLength: z
+      .number({ invalid_type_error: 'Informe a quantidade de caracteres' })
+      .int('Use um número inteiro')
+      .max(MAX_SECRET_LENGTH, `Máximo de ${MAX_SECRET_LENGTH} caracteres`),
+  })
+  .superRefine(({ algorithm, secretLength }, ctx) => {
+    const min = MIN_SECRET_LENGTH[algorithm];
+    if (secretLength < min) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['secretLength'],
+        message: `${algorithm} exige no mínimo ${min} caracteres`,
+      });
+    }
+  });
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -33,13 +54,17 @@ export function JwtTool() {
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       algorithm: 'HS256',
+      secretLength: DEFAULT_SECRET_LENGTH.HS256,
     },
   });
+  const algorithm = watch('algorithm');
 
   const result = generateMutation.data;
   const activeError = generateMutation.error ? getErrorMessage(generateMutation.error) : null;
@@ -47,6 +72,7 @@ export function JwtTool() {
   async function onGenerate(values: FormValues) {
     await generateMutation.mutateAsync({
       algorithm: values.algorithm,
+      secretLength: values.secretLength,
     });
   }
 
@@ -62,7 +88,15 @@ export function JwtTool() {
             label="Peso do token"
             hint="Define a força do HMAC usado na assinatura."
             error={errors.algorithm?.message}
-            {...register('algorithm')}
+            {...register('algorithm', {
+              // Troca o tamanho para o padrão do novo algoritmo, evitando ficar abaixo do mínimo dele.
+              onChange: (event) =>
+                setValue(
+                  'secretLength',
+                  DEFAULT_SECRET_LENGTH[event.target.value as FormValues['algorithm']],
+                  { shouldValidate: true },
+                ),
+            })}
           >
             {JWT_WEIGHTS.map((weight) => (
               <option key={weight.algorithm} value={weight.algorithm}>
@@ -70,6 +104,18 @@ export function JwtTool() {
               </option>
             ))}
           </Select>
+
+          <Input
+            label="Tamanho do segredo (caracteres)"
+            type="number"
+            inputMode="numeric"
+            min={MIN_SECRET_LENGTH[algorithm]}
+            max={MAX_SECRET_LENGTH}
+            step={1}
+            hint={`Entre ${MIN_SECRET_LENGTH[algorithm]} e ${MAX_SECRET_LENGTH}. Padrão: ${DEFAULT_SECRET_LENGTH[algorithm]}.`}
+            error={errors.secretLength?.message}
+            {...register('secretLength', { valueAsNumber: true })}
+          />
 
           <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
             Gera um token JWT curto e aleatório, sem expiração.

@@ -1,11 +1,15 @@
 import type { ImageProgressReporter } from '../image-convert/progress';
 import { createUniqueFileName, createZipArchive } from '../image-convert/zip';
+import { htmlToBlocks } from './blocks';
 import { convertDocxFile } from './docx';
+import { blocksToDocx } from './docx-writer';
 import { detectDocumentKind, isSupportedDocument } from './formats';
 import { getPdfPageCount, convertPdfFile } from './pdf';
+import { blocksToPdf } from './pdf-writer';
+import { odtToHtml, rtfToHtml } from './rich-text';
 import { convertSpreadsheetFile, getWorkbookSheetCount } from './spreadsheet';
 import { convertJsonFile, convertXmlFile } from './structured';
-import { convertTextLikeFile } from './text';
+import { convertHtmlBody, convertTextLikeFile } from './text';
 import {
   DOCUMENT_OUTPUT_FORMATS,
   type ConvertDocumentsInput,
@@ -15,6 +19,9 @@ import {
   type DocumentKind,
   type DocumentOutputFormat,
 } from './types';
+import { buildBaseName, createBinaryConvertedFile } from './utils';
+
+const SUPPORTED_INPUTS = 'PDF, DOCX, ODT, RTF, TXT, Markdown, HTML, XLSX, CSV, JSON ou XML';
 
 function getOutputMeta(format: DocumentOutputFormat) {
   const meta = DOCUMENT_OUTPUT_FORMATS.find((item) => item.value === format);
@@ -31,24 +38,25 @@ function assertSupportedCombination(kind: DocumentKind, outputFormat: DocumentOu
   }
 }
 
-async function convertDocumentFile(
+// Conversores de cada formato de entrada para as saídas "nativas" (sem PDF/DOCX gerados).
+async function convertNativeFile(
   file: File,
+  kind: DocumentKind,
   outputFormat: DocumentOutputFormat,
 ): Promise<ConvertedDocumentFile[]> {
-  if (!isSupportedDocument(file)) {
-    throw new Error(
-      `"${file.name}" ainda não é suportado. Use PDF, DOCX, TXT, Markdown, HTML, XLSX, CSV, JSON ou XML.`,
-    );
-  }
-
-  const kind = detectDocumentKind(file);
-  assertSupportedCombination(kind, outputFormat);
-
   switch (kind) {
     case 'pdf':
+      if (outputFormat === 'md') {
+        const [html] = await convertPdfFile(file, 'html');
+        return convertHtmlBody(buildBaseName(file.name), await html.blob.text(), 'md');
+      }
       return convertPdfFile(file, outputFormat as Extract<DocumentOutputFormat, 'png' | 'jpeg' | 'txt' | 'html'>);
     case 'docx':
       return convertDocxFile(file, outputFormat as Extract<DocumentOutputFormat, 'html' | 'txt' | 'md'>);
+    case 'odt':
+      return convertHtmlBody(buildBaseName(file.name), await odtToHtml(file), outputFormat);
+    case 'rtf':
+      return convertHtmlBody(buildBaseName(file.name), await rtfToHtml(file), outputFormat);
     case 'txt':
     case 'md':
     case 'html':
@@ -63,6 +71,43 @@ async function convertDocumentFile(
     default:
       throw new Error(`Tipo de documento não suportado: ${kind}`);
   }
+}
+
+// PDF e DOCX saem do HTML que o conversor do formato de origem já produz, preservando títulos, listas e tabelas.
+async function convertToGeneratedDocument(
+  file: File,
+  kind: DocumentKind,
+  outputFormat: 'pdf' | 'docx',
+): Promise<ConvertedDocumentFile> {
+  const [html] = await convertNativeFile(file, kind, 'html');
+  const blocks = htmlToBlocks(await html.blob.text());
+  if (blocks.length === 0) {
+    throw new Error(`"${file.name}" não tem texto para exportar.`);
+  }
+
+  const baseName = buildBaseName(file.name);
+  const meta = getOutputMeta(outputFormat);
+  // zipSync devolve Uint8Array sobre ArrayBuffer comum; o tipo genérico do fflate só não diz isso.
+  const content: BlobPart =
+    outputFormat === 'pdf' ? await blocksToPdf(blocks, baseName) : (blocksToDocx(blocks, baseName) as Uint8Array<ArrayBuffer>);
+  return createBinaryConvertedFile(baseName, meta.extension, content, meta.mime);
+}
+
+async function convertDocumentFile(
+  file: File,
+  outputFormat: DocumentOutputFormat,
+): Promise<ConvertedDocumentFile[]> {
+  if (!isSupportedDocument(file)) {
+    throw new Error(`"${file.name}" ainda não é suportado. Use ${SUPPORTED_INPUTS}.`);
+  }
+
+  const kind = detectDocumentKind(file);
+  assertSupportedCombination(kind, outputFormat);
+
+  if (outputFormat === 'pdf' || outputFormat === 'docx') {
+    return [await convertToGeneratedDocument(file, kind, outputFormat)];
+  }
+  return convertNativeFile(file, kind, outputFormat);
 }
 
 function createBatchProgressReporter(
@@ -133,9 +178,7 @@ async function packBatchResult(
 
 export async function inspectDocumentFile(file: File): Promise<DocumentFilePreview> {
   if (!isSupportedDocument(file)) {
-    throw new Error(
-      `"${file.name}" ainda não é suportado. Use PDF, DOCX, TXT, Markdown, HTML, XLSX, CSV, JSON ou XML.`,
-    );
+    throw new Error(`"${file.name}" ainda não é suportado. Use ${SUPPORTED_INPUTS}.`);
   }
 
   const kind = detectDocumentKind(file);

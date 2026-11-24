@@ -11,13 +11,13 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:alpine AS runtime
-RUN apk add --no-cache wget gettext
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY docker-entrypoint.d/99-subst-internal-api-key.sh /docker-entrypoint.d/99-subst-internal-api-key.sh
-RUN chmod +x /docker-entrypoint.d/99-subst-internal-api-key.sh
+# Sem root: por isso escuta na 8080. A imagem já traz envsubst e o wget do busybox.
+FROM nginxinc/nginx-unprivileged:alpine AS runtime
+# O script de entrada reescreve o default.conf no start: o arquivo precisa ser do usuário do nginx.
+COPY --chown=nginx:root nginx.conf /etc/nginx/conf.d/default.conf
+COPY --chmod=755 docker-entrypoint.d/99-subst-internal-api-key.sh /docker-entrypoint.d/99-subst-internal-api-key.sh
 COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://127.0.0.1/ || exit 1
+EXPOSE 8080
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=6 \
+  CMD wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1
 CMD ["nginx", "-g", "daemon off;"]

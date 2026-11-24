@@ -5,4 +5,10 @@ export type {
   HmacAlgorithm,
   JwtWeight,
 } from './types';
-export { HMAC_ALGORITHMS, JWT_WEIGHTS } from './types';
+export {
+  DEFAULT_SECRET_LENGTH,
+  HMAC_ALGORITHMS,
+  JWT_WEIGHTS,
+  MAX_SECRET_LENGTH,
+  MIN_SECRET_LENGTH,
+} from './types';

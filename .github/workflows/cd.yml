@@ -1,0 +1,197 @@
+# pipeline: github-actions-vps
+#
+# CD — todo push na main testa, builda as imagens no GHCR e publica na VPS via SSH com forced command.
+# Sem banco: não há imagem migrate, gate de migration nem backup.
+
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DEPLOY_TASK: bl-toolbox
+  MIGRATIONS_PATH: ""
+  CHECK_API_SUBDOMAIN: "false"
+
+jobs:
+  ci:
+    name: ci
+    uses: ./.github/workflows/ci.yml # zizmor: ignore[self-repository]
+    permissions:
+      contents: read
+
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      deployments: read
+    outputs:
+      deployable: ${{ steps.diff.outputs.deployable }}
+      infra: ${{ steps.diff.outputs.infra }}
+      base: ${{ steps.diff.outputs.base }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Comparar com o último deploy bem-sucedido
+        id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/deploy-changes.sh
+
+  build:
+    name: build (${{ matrix.image }})
+    needs: [ci, changes]
+    if: needs.changes.outputs.deployable == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - image: api
+            context: backend
+            target: runtime
+          - image: web
+            context: frontend
+            target: runtime
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Nome da imagem (GHCR exige minúsculas)
+        id: img
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}/${IMAGE}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build e push (tag = SHA do commit)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          target: ${{ matrix.target }}
+          push: true
+          tags: ${{ steps.img.outputs.ref }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  deploy:
+    name: deploy
+    needs: [changes, build]
+    if: needs.changes.outputs.deployable == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      deployments: write
+    environment:
+      name: production
+      url: ${{ vars.APP_URL }}
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validar configuração pública antes do deploy
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          HEALTH_PATH: ${{ vars.HEALTH_PATH || '/api/health' }}
+        run: node scripts/deploy-url.mjs
+
+      - name: Aviso — arquivos de infraestrutura mudaram
+        if: needs.changes.outputs.infra == 'true'
+        run: echo "::warning title=deploy/ mudou::Arquivos em deploy/ mudaram. A chave do CI não altera infraestrutura — sincronize compose/.env na VPS manualmente."
+
+      - name: Configurar SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          [[ -n "$SSH_KEY" && -n "$KNOWN_HOSTS" ]]
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Bloquear execução antiga antes de alterar a VPS
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/check-deploy-target.sh
+
+      - name: Deploy na VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          SHA: ${{ github.sha }}
+        run: |
+          [[ -n "$VPS_HOST" && -n "$VPS_USER" ]]
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+            -p "${VPS_PORT:-22}" "${VPS_USER}@${VPS_HOST}" "deploy $SHA"
+
+      - name: Health check público
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          HEALTH_PATH: ${{ vars.HEALTH_PATH || '/api/health' }}
+        run: bash scripts/public-health.sh
+
+      - name: Registrar versão publicada
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+          ENV_NAME: production
+          APP_URL: ${{ vars.APP_URL }}
+        run: bash scripts/record-deployment.sh
+
+      - name: Resumo
+        if: always()
+        env:
+          SHA: ${{ github.sha }}
+          BASE: ${{ needs.changes.outputs.base }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          {
+            echo "### Deploy: ${JOB_STATUS}"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Commit | \`${SHA}\` |"
+            echo "| Comparado com | \`${BASE:-nenhum deploy anterior}\` |"
+            echo "| Imagens | \`ghcr.io/${GITHUB_REPOSITORY,,}/{api,web}:${SHA}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remover chave do runner
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519

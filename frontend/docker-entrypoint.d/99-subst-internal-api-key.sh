@@ -8,5 +8,13 @@ fi
 
 conf="/etc/nginx/conf.d/default.conf"
 tmp="$(mktemp)"
-sed 's/__INTERNAL_API_KEY__/${INTERNAL_API_KEY}/g' "$conf" | envsubst '${INTERNAL_API_KEY}' > "$tmp"
+# Aspas simples de propósito: o envsubst recebe o NOME da variável, e só ela é trocada ($host etc. ficam).
+# shellcheck disable=SC2016
+envsubst '${INTERNAL_API_KEY}' < "$conf" > "$tmp"
+
+# Config vazia ou sem a chave faria o nginx subir sem servir nada: melhor falhar no start.
+if ! grep -qF -- "$INTERNAL_API_KEY" "$tmp"; then
+  echo "Falha ao gerar a config do nginx com INTERNAL_API_KEY." >&2
+  exit 1
+fi
 mv "$tmp" "$conf"

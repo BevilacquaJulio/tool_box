@@ -1,15 +1,6 @@
 import { SignJWT } from 'jose';
-import type {
-  GenerateRandomJwtInput,
-  GenerateRandomJwtResult,
-  HmacAlgorithm,
-} from './types';
-
-const SECRET_BYTE_LENGTH: Record<HmacAlgorithm, number> = {
-  HS256: 32,
-  HS384: 48,
-  HS512: 64,
-};
+import type { GenerateRandomJwtInput, GenerateRandomJwtResult } from './types';
+import { DEFAULT_SECRET_LENGTH, MAX_SECRET_LENGTH, MIN_SECRET_LENGTH } from './types';
 
 function randomBytes(length: number): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(length));
@@ -28,8 +19,9 @@ function randomToken(length: number): string {
   return toBase64Url(randomBytes(length));
 }
 
-function randomSecret(algorithm: HmacAlgorithm): string {
-  return randomToken(SECRET_BYTE_LENGTH[algorithm]);
+// Cada caractere base64url de bytes aleatórios carrega 6 bits uniformes; cortar no tamanho pedido mantém isso.
+function randomSecret(length: number): string {
+  return randomToken(Math.ceil((length * 3) / 4)).slice(0, length);
 }
 
 function randomPayload(): Record<string, unknown> {
@@ -41,7 +33,15 @@ function randomPayload(): Record<string, unknown> {
 export async function generateRandomJwt(
   input: GenerateRandomJwtInput,
 ): Promise<GenerateRandomJwtResult> {
-  const secret = randomSecret(input.algorithm);
+  const min = MIN_SECRET_LENGTH[input.algorithm];
+  const length = input.secretLength ?? DEFAULT_SECRET_LENGTH[input.algorithm];
+  if (!Number.isInteger(length) || length < min || length > MAX_SECRET_LENGTH) {
+    throw new Error(
+      `O segredo de ${input.algorithm} precisa ter entre ${min} e ${MAX_SECRET_LENGTH} caracteres.`,
+    );
+  }
+
+  const secret = randomSecret(length);
   const payload = randomPayload();
 
   const header = {

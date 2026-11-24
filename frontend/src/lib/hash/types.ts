@@ -8,8 +8,24 @@ export type HashAlgorithm =
   | 'django-pbkdf2-sha256'
   | 'md5'
   | 'sha1'
+  | 'sha224'
   | 'sha256'
+  | 'sha384'
   | 'sha512'
+  | 'mysql41'
+  // Formatos só identificados (sem geração).
+  | 'md5-crypt'
+  | 'sha256-crypt'
+  | 'sha512-crypt'
+  | 'yescrypt'
+  | 'bcrypt-sha256'
+  | 'pbkdf2-sha1'
+  | 'drupal7'
+  | 'django'
+  | 'werkzeug'
+  | 'ldap'
+  | 'cisco'
+  | 'mysql323'
   | 'unknown';
 
 export type HashSecurityLevel = 'strong' | 'moderate' | 'weak' | 'insecure';

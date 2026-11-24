@@ -1,62 +1,46 @@
-# CriaByCrypt
+# Toolbox
 
-Ferramenta **100% frontend** para identificar o tipo de hash de senha e gerar um novo hash no mesmo algoritmo e parametros do hash de referencia.
+Caixa de ferramentas para desenvolvedores em `toolbox.bevilabs.com.br`. Quase tudo roda **no navegador**:
+senhas, hashes e arquivos não saem da sua máquina. O backend só atende a verificação de banco de dados.
 
-Tudo roda **localmente no navegador** — senha e hash nunca saem da sua maquina.
+## Ferramentas
+
+- **Hash de senha:** identifica bcrypt, Argon2, scrypt, PBKDF2 (passlib/Django), phpass (WordPress/phpBB),
+  MySQL 4.1+, digests MD5/SHA-1/SHA-2 e reconhece crypt do Linux (`$1$`, `$5$`, `$6$`, `$y$`), LDAP, Werkzeug,
+  Drupal 7, Django e Cisco. Gera um novo hash no mesmo algoritmo e parâmetros quando suportado.
+- **JWT aleatório:** HS256/384/512 com segredo do tamanho escolhido (mínimo exigido pelo algoritmo, até 512).
+- **Conversão de documentos:** PDF, DOCX, ODT, RTF, TXT, Markdown, HTML, XLSX, CSV, JSON e XML para
+  **PDF**, **Word (.docx)**, HTML, TXT, Markdown, CSV, XLSX, JSON, XML ou imagens (páginas do PDF).
+  Títulos, negrito/itálico, listas, tabelas, código e citações são mantidos no PDF e no Word.
+- **Verificação de banco (MySQL/MariaDB):** TCP + autenticação, TLS, ping, schema, privilégios e escrita temporária.
+- Conversão de imagens e cores, JSON, QR Code, diff de texto.
 
 ## Stack
 
-- React + Vite + TypeScript
-- Tailwind CSS v4
-- TanStack Query + React Hook Form + Zod
-- bcryptjs, hash-wasm (Argon2/scrypt), Web Crypto API, @noble/hashes
+- Frontend: React + Vite + TypeScript, Tailwind CSS v4, TanStack Query, React Hook Form + Zod.
+- Backend: NestJS (`/api`), mysql2, Pino. Protegido por chave interna injetada pelo nginx.
 
-## Algoritmos suportados
-
-| Algoritmo | Identificar | Gerar |
-|---|---|---|
-| bcrypt (`$2a$`, `$2b$`, `$2y$`) | Sim | Sim |
-| Argon2 (`id`, `i`, `d`) | Sim | Sim |
-| scrypt | Sim | Sim |
-| phpass (`$P$`, `$H$`) | Sim | Sim |
-| PBKDF2-SHA256 / SHA512 | Sim | Sim |
-| Django PBKDF2-SHA256 | Sim | Sim |
-| MD5 / SHA-1 / SHA-256 / SHA-512 | Sim | Sim (com aviso) |
-
-## Como rodar
+## Rodar localmente
 
 ```bash
-cd frontend
-npm install
-npm run dev
+npm install                 # raiz: concurrently
+npm --prefix backend ci
+npm --prefix frontend ci
+npm run dev                 # API (:3000) + Web (:5173); ou dev:api / dev:web separados
 ```
 
-App: http://localhost:5173
-
-## Build para producao
-
-```bash
-cd frontend
-npm run build
-npm run preview
-```
-
-O `dist/` pode ser publicado em qualquer host estatico (Netlify, Vercel, nginx).
+No Windows, `iniciar-dev.bat` faz o mesmo com duplo clique. Antes, crie `backend/.env` e `frontend/.env`
+a partir dos `.env.example` de cada pasta (`INTERNAL_API_KEY` igual nos dois, mínimo 32 caracteres).
 
 ## Testes
 
 ```bash
-cd frontend
-npm test
+npm --prefix backend run ci     # lint, typecheck, unitários, e2e, build
+npm --prefix frontend test
+npm --prefix frontend run build
 ```
 
-## Fluxo de uso
+## Deploy
 
-1. Cole o hash de referencia (ex.: um hash bcrypt `$2y$10$...`)
-2. Clique em **Identificar tipo**
-3. Informe a senha desejada
-4. Clique em **Gerar novo hash**
-
-## Interface
-
-Monocromatica preto e branco com alternancia entre modo claro e escuro.
+Imagens buildadas no GitHub Actions, publicadas no GHCR e implantadas na VPS por SSH com forced command.
+Detalhes, `.env` de produção e passos de configuração em [.github/DEPLOYMENT.md](.github/DEPLOYMENT.md).

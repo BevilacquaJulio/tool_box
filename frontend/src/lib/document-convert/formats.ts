@@ -4,8 +4,8 @@ const EXTENSION_TO_KIND: Record<string, DocumentKind> = {
   pdf: 'pdf',
   docx: 'docx',
   doc: 'unknown',
-  odt: 'unknown',
-  rtf: 'unknown',
+  odt: 'odt',
+  rtf: 'rtf',
   txt: 'txt',
   md: 'md',
   markdown: 'md',
@@ -18,7 +18,7 @@ const EXTENSION_TO_KIND: Record<string, DocumentKind> = {
 };
 
 export const DOCUMENT_FILE_ACCEPT =
-  '.pdf,.docx,.txt,.md,.markdown,.html,.htm,.xlsx,.csv,.json,.xml,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/markdown,text/html,text/csv,application/json,application/xml,text/xml';
+  '.pdf,.docx,.odt,.rtf,.txt,.md,.markdown,.html,.htm,.xlsx,.csv,.json,.xml,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text,application/rtf,text/rtf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/markdown,text/html,text/csv,application/json,application/xml,text/xml';
 
 export function detectDocumentKind(file: File): DocumentKind {
   const extension = file.name.split('.').pop()?.toLowerCase();
@@ -32,6 +32,12 @@ export function detectDocumentKind(file: File): DocumentKind {
   }
   if (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
     return 'docx';
+  }
+  if (mime === 'application/vnd.oasis.opendocument.text') {
+    return 'odt';
+  }
+  if (mime === 'application/rtf' || mime === 'text/rtf') {
+    return 'rtf';
   }
   if (mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
     return 'xlsx';
@@ -67,6 +73,8 @@ export function getDocumentSelectionHint(kind: DocumentKind): string {
   const hints: Record<DocumentKind, string> = {
     pdf: 'O PDF será convertido localmente no navegador.',
     docx: 'O Word (.docx) será convertido localmente no navegador.',
+    odt: 'O documento OpenDocument (.odt) será convertido localmente no navegador.',
+    rtf: 'O RTF será convertido localmente; a formatação é descartada e o texto é mantido.',
     txt: 'Arquivo de texto pronto para exportar em outros formatos.',
     md: 'O Markdown será convertido localmente no navegador.',
     html: 'O HTML será convertido localmente no navegador.',
@@ -74,7 +82,7 @@ export function getDocumentSelectionHint(kind: DocumentKind): string {
     csv: 'O CSV será convertido localmente no navegador.',
     json: 'O JSON será convertido localmente no navegador.',
     xml: 'O XML será convertido localmente no navegador.',
-    unknown: 'Formato ainda não suportado neste modo.',
+    unknown: 'Formato ainda não suportado neste modo. Arquivos .doc antigos: salve como .docx.',
   };
 
   return hints[kind];

@@ -2,6 +2,11 @@
   "name": "toolbox",
   "private": true,
   "scripts": {
-    "test:docker": "node scripts/docker-smoke.cjs"
+    "dev": "concurrently -k -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm --prefix backend run dev",
+    "dev:web": "npm --prefix frontend run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.5"
   }
 }
