@@ -16,6 +16,8 @@ export type DbVerifyMetadata = {
   connectionId: number | null;
   maxConnections: number | null;
   tableCount: number | null;
+  /** Versão do TLS negociado; null quando a conexão ficou sem criptografia. */
+  tlsVersion: string | null;
 };
 
 export type DbVerifyResult = {

@@ -22,6 +22,9 @@ function parseXmlText(text: string): unknown {
     const parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: '@_',
+      // Sem isto a declaração <?xml ...?> vira uma chave "?xml" no JSON/CSV gerado.
+      ignoreDeclaration: true,
+      ignorePiTags: true,
     });
     return parser.parse(text);
   } catch {
@@ -29,24 +32,72 @@ function parseXmlText(text: string): unknown {
   }
 }
 
-function normalizeJsonRows(data: unknown): Record<string, unknown>[] {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+// Procura a primeira lista de registros dentro da estrutura (ex.: <catalogo><livro/>...<livro/></catalogo>).
+function findRecordArray(data: unknown): Record<string, unknown>[] | null {
   if (Array.isArray(data)) {
-    if (data.length === 0) {
-      throw new Error('JSON vazio.');
+    return data.length > 0 && data.every(isRecord) ? data : null;
+  }
+  if (isRecord(data)) {
+    for (const value of Object.values(data)) {
+      const rows = findRecordArray(value);
+      if (rows) return rows;
     }
+  }
+  return null;
+}
 
-    if (data.every((item) => item !== null && typeof item === 'object' && !Array.isArray(item))) {
-      return data as Record<string, unknown>[];
-    }
+// Objetos aninhados viram JSON na célula em vez de "[object Object]".
+function flattenRow(row: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(row).map(([key, value]) => [
+      key,
+      value !== null && typeof value === 'object' ? JSON.stringify(value) : value,
+    ]),
+  );
+}
 
-    throw new Error('JSON em array deve conter objetos para gerar CSV ou XLSX.');
+export function normalizeJsonRows(data: unknown): Record<string, unknown>[] {
+  if (Array.isArray(data) && data.length === 0) {
+    throw new Error('JSON vazio.');
+  }
+  if (Array.isArray(data) && data.every((item) => !isRecord(item) && !Array.isArray(item))) {
+    return data.map((value) => ({ valor: value }));
   }
 
-  if (data !== null && typeof data === 'object') {
-    return [data as Record<string, unknown>];
+  const rows = findRecordArray(data);
+  if (rows) {
+    return rows.map(flattenRow);
   }
 
-  throw new Error('JSON deve ser um objeto ou array de objetos.');
+  // Um único registro, possivelmente embrulhado em elementos de uma chave só (<raiz><item>...</item></raiz>).
+  let record = data;
+  while (isRecord(record) && Object.keys(record).length === 1 && isRecord(Object.values(record)[0])) {
+    record = Object.values(record)[0];
+  }
+  if (isRecord(record)) {
+    return [flattenRow(record)];
+  }
+
+  throw new Error('Não há dados tabulares: use um objeto ou uma lista de objetos.');
+}
+
+// Nomes de elemento XML não aceitam espaço, acento solto no início ou começar por número.
+function xmlName(key: string): string {
+  if (key.startsWith('@_') || key === '#text') return key;
+  const name = key.normalize('NFC').replace(/[^\p{L}\p{N}_.-]+/gu, '_');
+  return /^[\p{L}_]/u.test(name) && !/^xml/i.test(name) ? name : `_${name}`;
+}
+
+export function sanitizeXmlKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sanitizeXmlKeys);
+  if (isRecord(value)) {
+    return Object.fromEntries(Object.entries(value).map(([key, child]) => [xmlName(key), sanitizeXmlKeys(child)]));
+  }
+  return value;
 }
 
 function jsonToXml(data: unknown): string {
@@ -56,8 +107,11 @@ function jsonToXml(data: unknown): string {
     suppressEmptyNode: true,
   });
 
-  const xmlBody = builder.build({ root: data });
-  return `<?xml version="1.0" encoding="UTF-8"?>\n${xmlBody}`;
+  // XML precisa de um único elemento raiz: arrays e valores soltos ficam dentro de <root>.
+  const root = Array.isArray(data) ? { item: data } : isRecord(data) ? data : { value: data };
+  const xmlBody = builder.build({ root: sanitizeXmlKeys(root) });
+  return `<?xml version="1.0" encoding="UTF-8"?>
+${xmlBody}`;
 }
 
 function rowsToWorkbook(rows: Record<string, unknown>[]) {

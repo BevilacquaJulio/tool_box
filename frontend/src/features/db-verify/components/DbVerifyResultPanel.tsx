@@ -55,6 +55,7 @@ export function DbVerifyResultPanel({ result }: { result: DbVerifyResult }) {
           <MetadataItem label="Conn. ID" value={String(result.metadata.connectionId ?? '—')} />
           <MetadataItem label="Max conn." value={String(result.metadata.maxConnections ?? '—')} />
           <MetadataItem label="Tabelas" value={String(result.metadata.tableCount ?? '—')} />
+          <MetadataItem label="TLS" value={result.metadata.tlsVersion ?? 'Sem criptografia'} />
         </dl>
       )}
 

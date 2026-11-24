@@ -9,6 +9,30 @@ const turndown = new TurndownService({
   codeBlockStyle: 'fenced',
 });
 
+// O turndown converteria o <title> do <head> em texto: só o <body> vira Markdown.
+function bodyOf(html: string): string {
+  return /<body[\s>]/i.test(html) ? new DOMParser().parseFromString(html, 'text/html').body.innerHTML : html;
+}
+
+/** Converte um corpo HTML já extraído (ODT, RTF, PDF) para HTML, TXT ou Markdown. */
+export function convertHtmlBody(
+  baseName: string,
+  html: string,
+  outputFormat: DocumentOutputFormat,
+): ConvertedDocumentFile[] {
+  const bodyHtml = bodyOf(html);
+  if (outputFormat === 'html') {
+    return [createConvertedFile(baseName, 'html', wrapHtmlDocument(baseName, bodyHtml), 'text/html')];
+  }
+  if (outputFormat === 'md') {
+    return [createConvertedFile(baseName, 'md', turndown.turndown(bodyHtml), 'text/markdown')];
+  }
+  if (outputFormat === 'txt') {
+    return [createConvertedFile(baseName, 'txt', htmlToPlainText(bodyHtml), 'text/plain')];
+  }
+  throw new Error(`Conversão para ${outputFormat.toUpperCase()} não disponível.`);
+}
+
 export async function convertTextLikeFile(
   file: File,
   inputKind: 'txt' | 'md' | 'html',
@@ -26,7 +50,7 @@ export async function convertTextLikeFile(
 
   if (outputFormat === 'md') {
     if (inputKind === 'html') {
-      return [createConvertedFile(baseName, 'md', turndown.turndown(text), 'text/markdown')];
+      return [createConvertedFile(baseName, 'md', turndown.turndown(bodyOf(text)), 'text/markdown')];
     }
     return [createConvertedFile(baseName, 'md', text, 'text/markdown')];
   }

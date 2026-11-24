@@ -26,6 +26,7 @@ export type DbVerifyMetadata = {
   connectionId: number | null;
   maxConnections: number | null;
   tableCount: number | null;
+  tlsVersion: string | null;
 };
 
 export type DbVerifyResult = {

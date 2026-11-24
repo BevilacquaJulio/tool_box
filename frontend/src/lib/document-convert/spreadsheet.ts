@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { XMLBuilder } from 'fast-xml-parser';
+import { sanitizeXmlKeys } from './structured';
 import type { ConvertedDocumentFile } from './types';
 import type { DocumentOutputFormat } from './types';
 import {
@@ -43,10 +44,11 @@ function jsonRowsToXml(rows: Record<string, unknown>[]): string {
     suppressEmptyNode: true,
   });
 
+  // Cabeçalhos como "Nome Completo" não são nomes de tag válidos.
   return builder.build({
     rows: {
       row: rows.map((row) =>
-        Object.fromEntries(Object.entries(row).map(([key, value]) => [key, String(value ?? '')])),
+        sanitizeXmlKeys(Object.fromEntries(Object.entries(row).map(([key, value]) => [key, String(value ?? '')]))),
       ),
     },
   });

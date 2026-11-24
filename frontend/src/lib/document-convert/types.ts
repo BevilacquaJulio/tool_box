@@ -3,6 +3,8 @@ import type { ImageProgressReporter } from '../image-convert/progress';
 export type DocumentKind =
   | 'pdf'
   | 'docx'
+  | 'odt'
+  | 'rtf'
   | 'txt'
   | 'md'
   | 'html'
@@ -12,7 +14,23 @@ export type DocumentKind =
   | 'xml'
   | 'unknown';
 
+const ALL_KINDS: DocumentKind[] = ['pdf', 'docx', 'odt', 'rtf', 'txt', 'md', 'html', 'csv', 'xlsx', 'json', 'xml'];
+
 export const DOCUMENT_OUTPUT_FORMATS = [
+  {
+    value: 'pdf',
+    label: 'PDF (.pdf)',
+    extension: 'pdf',
+    mime: 'application/pdf',
+    supports: ALL_KINDS.filter((kind) => kind !== 'pdf') as DocumentKind[],
+  },
+  {
+    value: 'docx',
+    label: 'Word (.docx)',
+    extension: 'docx',
+    mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    supports: ALL_KINDS.filter((kind) => kind !== 'docx') as DocumentKind[],
+  },
   {
     value: 'png',
     label: 'PNG (páginas do PDF)',
@@ -32,21 +50,21 @@ export const DOCUMENT_OUTPUT_FORMATS = [
     label: 'Texto (.txt)',
     extension: 'txt',
     mime: 'text/plain',
-    supports: ['pdf', 'docx', 'txt', 'md', 'html', 'csv', 'xlsx', 'json', 'xml'] as DocumentKind[],
+    supports: ALL_KINDS,
   },
   {
     value: 'html',
     label: 'HTML (.html)',
     extension: 'html',
     mime: 'text/html',
-    supports: ['pdf', 'docx', 'txt', 'md', 'html', 'csv', 'xlsx', 'json', 'xml'] as DocumentKind[],
+    supports: ALL_KINDS,
   },
   {
     value: 'md',
     label: 'Markdown (.md)',
     extension: 'md',
     mime: 'text/markdown',
-    supports: ['docx', 'txt', 'md', 'html'] as DocumentKind[],
+    supports: ['pdf', 'docx', 'odt', 'rtf', 'txt', 'md', 'html'] as DocumentKind[],
   },
   {
     value: 'csv',

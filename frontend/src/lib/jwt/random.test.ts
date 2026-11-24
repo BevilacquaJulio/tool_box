@@ -39,4 +39,23 @@ describe('generateRandomJwt', () => {
       }),
     ).resolves.toBeDefined();
   });
+
+  it.each([32, 100, 512])('gera segredo com exatamente %i caracteres e assina com ele', async (secretLength) => {
+    const result = await generateRandomJwt({ algorithm: 'HS256', secretLength });
+
+    expect(result.secret).toHaveLength(secretLength);
+    expect(result.secret).toMatch(/^[A-Za-z0-9_-]+$/);
+    await expect(
+      jwtVerify(result.token, new TextEncoder().encode(result.secret), { algorithms: ['HS256'] }),
+    ).resolves.toBeDefined();
+  });
+
+  it.each([
+    ['HS256', 31],
+    ['HS512', 63],
+    ['HS256', 513],
+    ['HS256', 40.5],
+  ] as const)('recusa segredo fora do limite: %s com %s caracteres', async (algorithm, secretLength) => {
+    await expect(generateRandomJwt({ algorithm, secretLength })).rejects.toThrow(/entre/);
+  });
 });

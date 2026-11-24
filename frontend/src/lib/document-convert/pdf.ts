@@ -1,7 +1,7 @@
 import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy } from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { ConvertedDocumentFile, DocumentOutputFormat } from './types';
-import { buildBaseName, createConvertedFile, wrapHtmlDocument } from './utils';
+import { buildBaseName, createConvertedFile, escapeHtml, wrapHtmlDocument } from './utils';
 
 let workerConfigured = false;
 
@@ -62,9 +62,11 @@ async function extractPdfText(pdf: PDFDocumentProxy): Promise<string> {
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
     const textContent = await page.getTextContent();
+    // hasEOL marca o fim de cada linha visual; sem ele a página inteira vira uma linha só.
     const pageText = textContent.items
-      .map((item) => ('str' in item ? item.str : ''))
-      .join(' ')
+      .map((item) => ('str' in item ? item.str + (item.hasEOL ? '\n' : '') : ''))
+      .join('')
+      .replace(/[ \t]+\n/g, '\n')
       .trim();
 
     if (pageText) {
@@ -73,6 +75,15 @@ async function extractPdfText(pdf: PDFDocumentProxy): Promise<string> {
   }
 
   return chunks.join('\n\n');
+}
+
+// Linha em branco separa parágrafos; quebras simples dentro do parágrafo viram <br />.
+export function pdfTextToHtml(text: string): string {
+  return text
+    .split(/\n{2,}/)
+    .filter((paragraph) => paragraph.trim())
+    .map((paragraph) => `<p>${escapeHtml(paragraph.trim()).replace(/\n/g, '<br />')}</p>`)
+    .join('\n');
 }
 
 export async function convertPdfFile(
@@ -88,20 +99,8 @@ export async function convertPdfFile(
   }
 
   if (outputFormat === 'html') {
-    const text = await extractPdfText(pdf);
-    const escaped = text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/\n/g, '<br />');
-
     return [
-      createConvertedFile(
-        baseName,
-        'html',
-        wrapHtmlDocument(baseName, `<div>${escaped}</div>`),
-        'text/html',
-      ),
+      createConvertedFile(baseName, 'html', wrapHtmlDocument(baseName, pdfTextToHtml(await extractPdfText(pdf))), 'text/html'),
     ];
   }
 
