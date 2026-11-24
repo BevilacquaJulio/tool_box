@@ -30,7 +30,7 @@ Rollback ───► rollback.yml (manual): republica um SHA já publicado
 
 | Arquivo | Quem lê | Conteúdo | Permissão |
 | --- | --- | --- | --- |
-| `.env` | Compose (interpolação) | `DOMAIN`, `TRAEFIK_*`; `IMAGE_TAG` é gravada pelo executor | `600` |
+| `.env` | Compose (interpolação) | `DOMAIN`, `TRAEFIK_*`; `IMAGE_TAG` é gravada pelo executor | `660` na criação; o executor regrava como `deploy 600` |
 | `.env.production` | `env_file` da API e do web | `INTERNAL_API_KEY`, timeouts, throttle, `PORT` | `660` |
 
 Criar **sem sudo** e sem CRLF (`sed -i 's/\r$//' .env*`). `NODE_ENV`, `HOST` e `CORS_ORIGIN` são fixados pelo compose.
@@ -50,7 +50,7 @@ O modelo antigo fazia `git pull` + build na VPS com uma chave que abre shell. Or
    cd /home/juliobevi/htdocs/bevilabs/bl_toolbox
    # compose.yml a partir de deploy/compose.prod.yml; .env e .env.production a partir dos exemplos,
    # copiando os valores do .env atual (INTERNAL_API_KEY etc.).
-   chmod 600 .env; chmod 660 .env.production
+   chmod 660 .env .env.production   # o deploy lê pela ACL; com 600 o primeiro deploy falha
    IMAGE_TAG=0000000000000000000000000000000000000000 docker compose -f compose.yml config --quiet
    sudo install -o root -g root -m 755 deploy.sh /home/deploy/bin/deploy-toolbox.sh
    echo 'command="/home/deploy/bin/deploy-toolbox.sh bl_toolbox",restrict ssh-ed25519 AAAA... gha-deploy-bl_toolbox' \

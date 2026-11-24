@@ -17,9 +17,8 @@
 set -euo pipefail
 
 # Git Bash não deve converter /api/... em caminho Windows ao chamar Node ou gh.
-if [[ "${OSTYPE:-}" == msys* ]]; then
-  export MSYS2_ENV_CONV_EXCL="${MSYS2_ENV_CONV_EXCL:+$MSYS2_ENV_CONV_EXCL;}HEALTH_PATH"
-fi
+# Sem checar OSTYPE: há Git Bash que se reporta como "cygwin", e fora do Windows a variável é ignorada.
+export MSYS2_ENV_CONV_EXCL="${MSYS2_ENV_CONV_EXCL:+$MSYS2_ENV_CONV_EXCL;}HEALTH_PATH"
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 node "$script_dir/deploy-url.mjs" > /dev/null

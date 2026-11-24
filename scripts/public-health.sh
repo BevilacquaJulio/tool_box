@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ "${OSTYPE:-}" == msys* ]]; then
-  export MSYS2_ENV_CONV_EXCL="${MSYS2_ENV_CONV_EXCL:+$MSYS2_ENV_CONV_EXCL;}HEALTH_PATH"
-fi
+# Git Bash (reportado como "msys" ou "cygwin") converteria /api/... em caminho Windows; no Linux é ignorada.
+export MSYS2_ENV_CONV_EXCL="${MSYS2_ENV_CONV_EXCL:+$MSYS2_ENV_CONV_EXCL;}HEALTH_PATH"
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 urls="$(node "$script_dir/deploy-url.mjs" --all)"
