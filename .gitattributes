@@ -1,2 +1,3 @@
 # Entrypoints POSIX quebram no Linux se o Git converter para CRLF no Windows.
 *.sh text eol=lf
+*.bat text eol=crlf
