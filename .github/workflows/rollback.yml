@@ -1,0 +1,117 @@
+# Rollback manual — republica as imagens de um commit anterior da main que já existe no GHCR.
+
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: SHA completo (40 caracteres) de um commit da main que já foi publicado
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: rollback
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DEPLOY_TASK: bl-toolbox
+  CHECK_API_SUBDOMAIN: "false"
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validar o SHA informado
+        env:
+          SHA: ${{ inputs.sha }}
+        run: |
+          if [[ ! "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Informe o SHA completo, em minúsculas, com 40 caracteres."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$SHA" origin/main; then
+            echo "::error::Esse commit não faz parte do histórico da main."
+            exit 1
+          fi
+          echo "OK: $SHA está na main."
+
+  rollback:
+    name: rollback
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      deployments: write
+    environment:
+      name: production
+      url: ${{ vars.APP_URL }}
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validar configuração pública antes do rollback
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          HEALTH_PATH: ${{ vars.HEALTH_PATH || '/api/health' }}
+        run: node scripts/deploy-url.mjs
+
+      - name: Configurar SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          [[ -n "$SSH_KEY" && -n "$KNOWN_HOSTS" ]]
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Republicar a versão escolhida
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          [[ -n "$VPS_HOST" && -n "$VPS_USER" ]]
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+            -p "${VPS_PORT:-22}" "${VPS_USER}@${VPS_HOST}" "deploy $SHA"
+
+      - name: Health check público
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          HEALTH_PATH: ${{ vars.HEALTH_PATH || '/api/health' }}
+        run: bash scripts/public-health.sh
+
+      - name: Registrar versão republicada
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.sha }}
+          ENV_NAME: production
+          APP_URL: ${{ vars.APP_URL }}
+        run: bash scripts/record-deployment.sh
+
+      - name: Remover chave do runner
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519

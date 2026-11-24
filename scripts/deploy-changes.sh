@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${GITHUB_REPOSITORY:?}" "${GITHUB_SHA:?}" "${GITHUB_OUTPUT:?}" "${DEPLOY_TASK:?Defina DEPLOY_TASK no workflow (ex.: meu-app)}"
+# Sem ":" no default: MIGRATIONS_PATH="" (app sem banco) desliga o gate em vez de cair no caminho do Prisma.
+migrations_path="${MIGRATIONS_PATH-backend/prisma/migrations/}"
+
+# Só registros explícitos guardam o SHA realmente publicado, inclusive em rollbacks.
+deployments="$(gh api --paginate "repos/$GITHUB_REPOSITORY/deployments?per_page=100" \
+  --jq ".[] | select(.task == \"$DEPLOY_TASK\" and (.environment == \"production\" or .environment == \"production-db\")) | \"\(.id) \(.sha)\"")"
+base=""
+while read -r id sha; do
+  [[ -n "${id:-}" ]] || continue
+  # Qualquer status success conta: o GitHub marca o registro como "inactive" logo
+  # depois, quando o job com environment termina, e olhar só o último perdia a base.
+  ok="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses?per_page=100" --jq 'any(.[]; .state == "success")')"
+  if [[ "$ok" == "true" ]]; then base="$sha"; break; fi
+done <<< "$deployments"
+
+if [[ -n "$base" ]] && git cat-file -e "${base}^{commit}" 2>/dev/null; then
+  files="$(git diff --name-only "$base" "$GITHUB_SHA")"
+else
+  # O migrator aplica todo o histórico no primeiro deploy; o gate precisa cobrir esse mesmo histórico.
+  echo "Sem deploy anterior confiável: tratando o repositório inteiro como alterado."
+  base=""
+  files="$(git ls-tree -r --name-only "$GITHUB_SHA")"
+fi
+
+not_deployable='^(CHANGELOG\.md|version\.txt|\.release-please-manifest\.json|LICENSE|docs/.*|\.github/ISSUE_TEMPLATE/.*|\.github/dependabot\.yml|.*\.md)$'
+deployable=false; migrations=false; infra=false
+if [[ -n "$files" ]] && grep -qvE "$not_deployable" <<< "$files"; then deployable=true; fi
+while read -r file; do
+  if [[ -n "$migrations_path" && "$file" == "$migrations_path"* ]]; then migrations=true; fi
+  if [[ "$file" == deploy/* ]]; then infra=true; fi
+done <<< "$files"
+
+printf 'deployable=%s\nmigrations=%s\ninfra=%s\nbase=%s\n' \
+  "$deployable" "$migrations" "$infra" "$base" >> "$GITHUB_OUTPUT"
+echo "deployable=$deployable migrations=$migrations infra=$infra base=${base:-nenhum}"

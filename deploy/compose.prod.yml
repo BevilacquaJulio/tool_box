@@ -1,0 +1,67 @@
+# Produção na VPS (Modelo C: imagens prontas do GHCR, sem build na VPS).
+# Copie à mão para /home/juliobevi/htdocs/bevilabs/bl_toolbox/compose.yml ANTES do merge que depender dele.
+# IMAGE_TAG fica no .env e é gravada pelo executor de deploy; não edite.
+#
+# Roteamento same-origin pelo nginx do web (não pelo Traefik): o nginx injeta x-internal-api-key no /api,
+# e a API fica só na rede interna, sem rota pública.
+name: bl_toolbox
+
+services:
+  api:
+    image: ghcr.io/bevilacquajulio/tool_box/api:${IMAGE_TAG:?IMAGE_TAG não definida}
+    container_name: bl_toolbox-api
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      HOST: "0.0.0.0"
+      CORS_ORIGIN: https://${DOMAIN:?DOMAIN não definida}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    networks: [internal]
+    labels:
+      - traefik.enable=false
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    mem_limit: 512m
+    cpus: 0.75
+
+  web:
+    image: ghcr.io/bevilacquajulio/tool_box/web:${IMAGE_TAG:?IMAGE_TAG não definida}
+    container_name: bl_toolbox-app
+    restart: unless-stopped
+    # Só INTERNAL_API_KEY é usada pelo nginx; o mesmo arquivo evita duas cópias da chave.
+    env_file: .env.production
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    networks: [internal, traefik]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik
+      - "traefik.http.routers.bl_toolbox-web.rule=Host(`${DOMAIN:?DOMAIN não definida}`)"
+      - traefik.http.routers.bl_toolbox-web.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.bl_toolbox-web.tls=true
+      - traefik.http.routers.bl_toolbox-web.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      - traefik.http.services.bl_toolbox-web.loadbalancer.server.port=8080
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    mem_limit: 128m
+    cpus: 0.25
+
+networks:
+  internal:
+  traefik:
+    external: true
