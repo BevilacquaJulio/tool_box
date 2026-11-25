@@ -396,7 +396,7 @@ export {
   OUTPUT_FORMAT_VALUES,
 } from './types';
 export { createImageFileEntries, createImageFileEntry } from './entries';
-export { detectImageFormat, getDecodeHint, IMAGE_FILE_ACCEPT } from './formats';
+export { detectImageFormat, getDecodeHint, IMAGE_FILE_ACCEPT, isSupportedImage } from './formats';
 export type { ImageFileEntry } from './entries';
 export type {
   ConvertImageInput,

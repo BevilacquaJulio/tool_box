@@ -19,11 +19,14 @@ import {
   type ConvertDocumentsResult,
   type DocumentFileEntry,
   type DocumentFilePreview,
+  type DocumentKind,
   type DocumentOutputFormat,
 } from '../../../lib/document-convert';
 import { getErrorMessage } from '../../../lib/errors';
+import { ALL_CONVERTER_FILE_ACCEPT, isFileDragEvent } from '../../../lib/file-convert/intake';
 import { formatFileSize } from '../../../lib/image-convert';
 import type { ImageProgressUpdate } from '../../../lib/image-convert/progress';
+import type { ConverterFileTransfer } from '../../file-convert/components/FileConvertTool';
 import { useConvertDocumentsMutation } from '../hooks/useDocumentConvertMutation';
 
 type SelectionState =
@@ -31,12 +34,18 @@ type SelectionState =
   | { mode: 'single'; preview: DocumentFilePreview }
   | { mode: 'batch'; items: DocumentFileEntry[] };
 
-function getAvailableOutputFormats(items: DocumentFileEntry[]) {
-  if (items.length === 0) {
+type DocumentConvertToolProps = {
+  incomingTransfer?: ConverterFileTransfer | null;
+  onConsumeTransfer?: (transferId: number) => void;
+  onRouteFiles?: (files: File[]) => void;
+  isFrameDragging?: boolean;
+};
+
+function getAvailableOutputFormats(kinds: DocumentKind[]) {
+  if (kinds.length === 0) {
     return [...DOCUMENT_OUTPUT_FORMATS];
   }
 
-  const kinds = items.map((item) => item.format);
   return DOCUMENT_OUTPUT_FORMATS.filter((format) =>
     kinds.every((kind) => format.supports.includes(kind)),
   );
@@ -279,28 +288,37 @@ function ResultPanel({ result }: { result: ConvertDocumentsResult }) {
   );
 }
 
-export function DocumentConvertTool() {
+export function DocumentConvertTool({
+  incomingTransfer,
+  onConsumeTransfer,
+  onRouteFiles,
+  isFrameDragging = false,
+}: DocumentConvertToolProps = {}) {
   const convertMutation = useConvertDocumentsMutation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selection, setSelection] = useState<SelectionState>({ mode: 'none' });
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [isLoadingSelection, setIsLoadingSelection] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
+  const [isLocalDragging, setIsLocalDragging] = useState(false);
   const [progress, setProgress] = useState<ImageProgressUpdate | null>(null);
   const resultUrlRef = useRef<string | null>(null);
   const progressClearTimerRef = useRef<number | null>(null);
+  const lastTransferIdRef = useRef<number | null>(null);
+  const applyIncomingFilesRef = useRef<
+    (incoming: File[], options?: { replace?: boolean }) => Promise<void>
+  >(async () => {});
 
-  const selectedEntries =
-    selection.mode === 'single'
-      ? [createDocumentFileEntries([selection.preview.file])[0]]
-      : selection.mode === 'batch'
-        ? selection.items
-        : [];
+  const availableFormats = useMemo(() => {
+    const kinds =
+      selection.mode === 'single'
+        ? [selection.preview.format]
+        : selection.mode === 'batch'
+          ? selection.items.map((item) => item.format)
+          : [];
+    return getAvailableOutputFormats(kinds);
+  }, [selection]);
 
-  const availableFormats = useMemo(
-    () => getAvailableOutputFormats(selectedEntries),
-    [selectedEntries],
-  );
+  const isDragging = isFrameDragging || isLocalDragging;
 
   const {
     control,
@@ -409,7 +427,7 @@ export function DocumentConvertTool() {
     const unsupported = files.filter((file) => !isSupportedDocument(file));
     if (unsupported.length > 0) {
       throw new Error(
-        `"${unsupported[0].name}" não é suportado. Use PDF, DOCX, ODT, RTF, TXT, Markdown, HTML, XLSX, CSV, JSON ou XML.`,
+        `"${unsupported[0].name}" não é suportado. Use PDF, DOCX, ODT, RTF, TXT, Markdown, HTML, XLSX, XLS, ODS, CSV, TSV, JSON ou XML.`,
       );
     }
     return files;
@@ -418,11 +436,16 @@ export function DocumentConvertTool() {
   async function loadSinglePreview(file: File) {
     setIsLoadingSelection(true);
     setSelectionError(null);
-    setProgress(null);
+    setProgress({
+      stage: 'decoding',
+      value: 45,
+      label: `Analisando ${file.name}...`,
+    });
 
     try {
       const preview = await inspectDocumentFile(file);
       setSelection({ mode: 'single', preview });
+      setProgress(null);
     } catch (error) {
       setSelection({ mode: 'none' });
       setSelectionError(getErrorMessage(error));
@@ -432,7 +455,7 @@ export function DocumentConvertTool() {
     }
   }
 
-  async function applyIncomingFiles(incoming: File[]) {
+  async function applyIncomingFiles(incoming: File[], options?: { replace?: boolean }) {
     if (incoming.length === 0) {
       return;
     }
@@ -443,7 +466,8 @@ export function DocumentConvertTool() {
     revokeResultUrl();
 
     try {
-      const merged = validateIncomingFiles([...collectExistingFiles(), ...incoming]);
+      const baseFiles = options?.replace ? [] : collectExistingFiles();
+      const merged = validateIncomingFiles([...baseFiles, ...incoming]);
 
       if (merged.length === 1) {
         await loadSinglePreview(merged[0]);
@@ -458,15 +482,59 @@ export function DocumentConvertTool() {
     }
   }
 
+  applyIncomingFilesRef.current = applyIncomingFiles;
+
+  useEffect(() => {
+    if (!incomingTransfer || incomingTransfer.targetMode !== 'documents') {
+      return;
+    }
+    if (lastTransferIdRef.current === incomingTransfer.id) {
+      return;
+    }
+    lastTransferIdRef.current = incomingTransfer.id;
+    onConsumeTransfer?.(incomingTransfer.id);
+    void applyIncomingFilesRef.current(incomingTransfer.files, {
+      replace: incomingTransfer.replace,
+    });
+  }, [incomingTransfer, onConsumeTransfer]);
+
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const incoming = Array.from(event.target.files ?? []);
     event.target.value = '';
+    if (incoming.length === 0) {
+      return;
+    }
+    if (onRouteFiles) {
+      onRouteFiles(incoming);
+      return;
+    }
     await applyIncomingFiles(incoming);
   }
 
-  function handleDrop(event: DragEvent<HTMLLabelElement>) {
+  function handleStandaloneDragOver(event: DragEvent<HTMLLabelElement>) {
+    if (onRouteFiles || !isFileDragEvent(event.dataTransfer)) {
+      return;
+    }
     event.preventDefault();
-    setIsDragging(false);
+    event.dataTransfer.dropEffect = 'copy';
+    setIsLocalDragging(true);
+  }
+
+  function handleStandaloneDragLeave(event: DragEvent<HTMLLabelElement>) {
+    if (onRouteFiles) {
+      return;
+    }
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setIsLocalDragging(false);
+    }
+  }
+
+  function handleStandaloneDrop(event: DragEvent<HTMLLabelElement>) {
+    if (onRouteFiles || !isFileDragEvent(event.dataTransfer)) {
+      return;
+    }
+    event.preventDefault();
+    setIsLocalDragging(false);
     const dropped = Array.from(event.dataTransfer.files ?? []);
     void applyIncomingFiles(dropped);
   }
@@ -534,26 +602,25 @@ export function DocumentConvertTool() {
             {selection.mode === 'none' && !isLoadingSelection && (
               <label
                 htmlFor="document-convert-input"
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setIsDragging(true);
-                }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-                className={`flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-4 py-7 text-center transition-colors duration-150 ${
+                data-dragging={isDragging ? 'true' : 'false'}
+                onDragOver={handleStandaloneDragOver}
+                onDragLeave={handleStandaloneDragLeave}
+                onDrop={handleStandaloneDrop}
+                className={`converter-drop-zone flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-4 py-7 text-center ${
                   isDragging
                     ? 'border-[var(--accent)] bg-[var(--accent-soft)]'
                     : 'border-[var(--border-strong)] bg-[var(--bg-subtle)] hover:border-[var(--accent-border)] hover:bg-[var(--bg-panel)]'
                 }`}
               >
-                <span className="inline-flex size-11 items-center justify-center rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--accent)]">
+                <span className="pointer-events-none inline-flex size-11 items-center justify-center rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--accent)]">
                   <UploadSimple size={20} weight="duotone" aria-hidden="true" />
                 </span>
-                <span className="mt-3 text-sm font-semibold text-[var(--ink)]">
-                  Arraste documentos ou clique para selecionar
+                <span className="pointer-events-none mt-3 text-sm font-semibold text-[var(--ink)]">
+                  Arraste arquivos ou clique para selecionar
                 </span>
-                <span className="mt-1 max-w-sm text-xs leading-relaxed text-[var(--ink-muted)]">
-                  PDF, Word (.docx), ODT, RTF, TXT, Markdown, HTML, XLSX, CSV, JSON e XML
+                <span className="pointer-events-none mt-1 max-w-sm text-xs leading-relaxed text-[var(--ink-muted)]">
+                  PDF, Word (.docx), ODT, RTF, TXT, Markdown, HTML, XLSX/XLS/ODS, CSV/TSV, JSON e
+                  XML — imagens alternam o modo automaticamente
                 </span>
               </label>
             )}
@@ -562,7 +629,7 @@ export function DocumentConvertTool() {
               id="document-convert-input"
               ref={fileInputRef}
               type="file"
-              accept={DOCUMENT_FILE_ACCEPT}
+              accept={onRouteFiles ? ALL_CONVERTER_FILE_ACCEPT : DOCUMENT_FILE_ACCEPT}
               multiple
               onChange={(event) => void handleFileChange(event)}
               className="sr-only"
