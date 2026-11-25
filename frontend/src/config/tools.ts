@@ -1,4 +1,23 @@
-import { BracketsCurly, Database, Files, GitDiff, Hash, Key, Palette, QrCode, type Icon } from '@phosphor-icons/react';
+import {
+  BracketsCurly,
+  Database,
+  Files,
+  GitDiff,
+  Hash,
+  Key,
+  Palette,
+  QrCode,
+  type Icon,
+} from '@phosphor-icons/react';
+
+export type ToolCategory = 'Segurança' | 'Dados' | 'Arquivos' | 'Criação';
+
+export const TOOL_CATEGORIES: readonly ToolCategory[] = [
+  'Segurança',
+  'Dados',
+  'Arquivos',
+  'Criação',
+];
 
 export type ToolDefinition = {
   id: string;
@@ -9,9 +28,10 @@ export type ToolDefinition = {
   icon: Icon;
   available: boolean;
   tags: string[];
-  category: 'Segurança' | 'Criação' | 'Dados' | 'Arquivos';
+  category: ToolCategory;
   processing: 'local' | 'hybrid';
   featured: boolean;
+  shortcutNumber: number;
 };
 
 export const tools: ToolDefinition[] = [
@@ -24,45 +44,33 @@ export const tools: ToolDefinition[] = [
     path: '/hash',
     icon: Hash,
     available: true,
-    tags: ['bcrypt', 'argon2', 'scrypt'],
+    tags: ['bcrypt', 'argon2', 'scrypt', 'pbkdf2', 'md5', 'sha256'],
     category: 'Segurança',
     processing: 'local',
     featured: false,
+    shortcutNumber: 1,
   },
   {
     id: 'jwt',
     title: 'Gerador de JWT',
     description:
       'Gere tokens JWT com segredo e claims aleatórios. Escolha o nível HMAC adequado para cada teste.',
-    shortDescription: 'Gera tokens e segredos para testes de autenticação.',
+    shortDescription: 'Gera tokens e segredos HMAC para testes de autenticação.',
     path: '/jwt',
     icon: Key,
     available: true,
-    tags: ['token', 'auth'],
+    tags: ['token', 'auth', 'hs256', 'hs384', 'hs512', 'hmac'],
     category: 'Segurança',
     processing: 'local',
     featured: false,
-  },
-  {
-    id: 'qrcode',
-    title: 'QR Code',
-    description:
-      'Gere QR Codes para URL, texto, Wi-Fi, Pix, vCard, e-mail e telefone. Exporte PNG ou SVG localmente.',
-    shortDescription: 'QR Code para URL, Pix, Wi-Fi, vCard e mais. Exporta PNG ou SVG.',
-    path: '/qrcode',
-    icon: QrCode,
-    available: true,
-    tags: ['url', 'wifi', 'pix', 'vcard', 'png', 'svg'],
-    category: 'Criação',
-    processing: 'local',
-    featured: true,
+    shortcutNumber: 2,
   },
   {
     id: 'json',
     title: 'JSON Formatter',
     description:
-      'Formate, minifique, valide e converta JSON, YAML, XML e CSV com indicação precisa de erros.',
-    shortDescription: 'Formata, valida e converte JSON, YAML, XML e CSV.',
+      'Formate, minifique, valide e converta JSON, YAML, XML e CSV com indicação precisa de linha e coluna.',
+    shortDescription: 'Formata, valida, ordena chaves e converte JSON, YAML, XML e CSV.',
     path: '/json',
     icon: BracketsCurly,
     available: true,
@@ -70,61 +78,81 @@ export const tools: ToolDefinition[] = [
     category: 'Dados',
     processing: 'local',
     featured: true,
+    shortcutNumber: 3,
   },
   {
     id: 'diff',
     title: 'Comparador de textos',
     description:
-      'Compare textos e códigos lado a lado, destaque mudanças e exporte o resultado em HTML.',
-    shortDescription: 'Diff lado a lado com destaque de alterações.',
+      'Compare textos e códigos lado a lado, destaque diferenças por caractere e exporte em HTML ou patch.',
+    shortDescription: 'Diff lado a lado com realce por caractere e exportação.',
     path: '/diff',
     icon: GitDiff,
     available: true,
-    tags: ['diff', 'compare', 'code', 'text', 'highlight'],
+    tags: ['diff', 'compare', 'code', 'patch', 'highlight'],
     category: 'Dados',
     processing: 'local',
     featured: false,
+    shortcutNumber: 4,
   },
   {
-    id: 'colors',
-    title: 'Laboratório de cores',
+    id: 'db-verify',
+    title: 'Verificação de banco',
     description:
-      'Converta HEX, RGB, HSL, HSV e CMYK. Crie paletas, verifique contraste e ajuste luminosidade.',
-    shortDescription: 'Converte HEX, RGB, HSL e monta paletas com checagem de contraste.',
-    path: '/colors',
-    icon: Palette,
+      'Teste host, banco, usuário e senha MySQL/MariaDB com diagnóstico de TCP, TLS, schema, privilégios e escrita temporária.',
+    shortDescription: 'Diagnóstico MySQL/MariaDB de conexão, TLS e privilégios via API interna.',
+    path: '/db-verify',
+    icon: Database,
     available: true,
-    tags: ['hex', 'rgb', 'hsl', 'wcag', 'palette', 'picker'],
-    category: 'Criação',
-    processing: 'local',
-    featured: true,
+    tags: ['mysql', 'mariadb', 'database', 'tls', 'connection'],
+    category: 'Dados',
+    processing: 'hybrid',
+    featured: false,
+    shortcutNumber: 5,
   },
   {
     id: 'convert',
     title: 'Conversor de arquivos',
     description:
-      'Converta imagens, documentos e planilhas em formatos úteis, direto no navegador.',
-    shortDescription: 'Converte imagens, documentos e planilhas no navegador.',
+      'Converta imagens (PNG, WebP, AVIF, HEIC, RAW) e documentos (PDF, DOCX, XLSX, CSV, Markdown, HTML) direto no navegador.',
+    shortDescription: 'Converte imagens, documentos e planilhas localmente em lote ou individual.',
     path: '/converter',
     icon: Files,
     available: true,
-    tags: ['png', 'webp', 'pdf', 'docx', 'xlsx', 'csv', 'json', 'xml', 'md', 'html'],
+    tags: ['png', 'webp', 'heic', 'pdf', 'docx', 'xlsx', 'csv', 'md'],
     category: 'Arquivos',
     processing: 'local',
     featured: true,
+    shortcutNumber: 6,
   },
   {
-    id: 'db-verify',
-    title: 'Verificacao de banco',
+    id: 'qrcode',
+    title: 'QR Code',
     description:
-      'Teste host, banco, usuario e senha MySQL com diagnostico rigoroso de conexao, schema e permissoes basicas.',
-    shortDescription: 'Valida conexao MySQL com teste completo via API interna.',
-    path: '/db-verify',
-    icon: Database,
+      'Gere QR Codes para URL, texto, Wi-Fi, Pix, vCard, e-mail e telefone. Exporte em PNG ou SVG localmente.',
+    shortDescription: 'QR Code para URL, Pix, Wi-Fi, vCard e mais em PNG ou SVG.',
+    path: '/qrcode',
+    icon: QrCode,
     available: true,
-    tags: ['mysql', 'database', 'connection', 'host', 'credentials'],
-    category: 'Dados',
-    processing: 'hybrid',
-    featured: false,
+    tags: ['url', 'wifi', 'pix', 'vcard', 'png', 'svg'],
+    category: 'Criação',
+    processing: 'local',
+    featured: true,
+    shortcutNumber: 7,
+  },
+  {
+    id: 'colors',
+    title: 'Laboratório de cores',
+    description:
+      'Converta HEX, RGB, HSL, HSV e CMYK. Monte paletas, valide contraste WCAG e construa degradês CSS e Tailwind.',
+    shortDescription: 'Converte formatos, valida contraste WCAG e gera paletas e degradês.',
+    path: '/colors',
+    icon: Palette,
+    available: true,
+    tags: ['hex', 'rgb', 'hsl', 'cmyk', 'wcag', 'gradient'],
+    category: 'Criação',
+    processing: 'local',
+    featured: true,
+    shortcutNumber: 8,
   },
 ];

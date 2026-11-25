@@ -4,8 +4,8 @@ import { ColorConvertTool } from '../features/color-convert/components/ColorConv
 export function ColorConvertToolPage() {
   return (
     <ToolPageLayout
-      title="Conversor de cores"
-      description="Converta cores entre HEX, RGB e HSL, crie paletas e gradientes lineares, radiais ou cônicos e exporte o resultado em CSS ou Tailwind."
+      title="Laboratório de cores"
+      description="Converta valores cromáticos, confira contraste WCAG em fundos claro e escuro, gere paletas harmônicas e monte degradês CSS/Tailwind."
     >
       <ColorConvertTool />
     </ToolPageLayout>

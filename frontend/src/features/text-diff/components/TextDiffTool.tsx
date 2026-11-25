@@ -1,7 +1,8 @@
-import { CheckCircle, DownloadSimple, GitDiff } from '@phosphor-icons/react';
+import { ArrowsLeftRight, DownloadSimple, GitDiff } from '@phosphor-icons/react';
 import { useRef, useState, type ChangeEvent } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { Button } from '../../../components/Button';
+import { StudioAlert, StudioPanel } from '../../../components/PageShell';
 import { getErrorMessage } from '../../../lib/errors';
 import { formatFileSize } from '../../../lib/image-convert';
 import { useTextDiffMutation } from '../hooks/useTextDiffMutation';
@@ -42,7 +43,7 @@ export function TextDiffTool() {
   const [leftFileName, setLeftFileName] = useState<string | null>(null);
   const [rightFileName, setRightFileName] = useState<string | null>(null);
 
-  const { register, handleSubmit, setValue, watch } = useForm<FormValues>({
+  const { control, register, handleSubmit, getValues, setValue, watch } = useForm<FormValues>({
     defaultValues: {
       leftText: '',
       rightText: '',
@@ -72,6 +73,16 @@ export function TextDiffTool() {
     });
   }
 
+  function handleSwapSides() {
+    const currentLeft = getValues('leftText');
+    const currentRight = getValues('rightText');
+    setValue('leftText', currentRight, { shouldDirty: true });
+    setValue('rightText', currentLeft, { shouldDirty: true });
+    setLeftFileName(rightFileName);
+    setRightFileName(leftFileName);
+    diffMutation.reset();
+  }
+
   async function handleFileImport(side: 'left' | 'right', event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) {
@@ -89,27 +100,38 @@ export function TextDiffTool() {
       setRightFileName(label);
     }
 
+    event.target.value = '';
     diffMutation.reset();
   }
 
   return (
-    <div className="space-y-6">
-      <form className="space-y-6" onSubmit={handleSubmit(onCompare)}>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
+    <div className="space-y-5">
+      <form className="space-y-4" onSubmit={handleSubmit(onCompare)}>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">
           <div>
-            <DiffEditorPanel
-              title="Texto original"
-              fileName={leftFileName}
-              onImport={() => leftFileInputRef.current?.click()}
-              onClear={() => {
-                setLeftFileName(null);
-                setValue('leftText', '');
-                if (leftFileInputRef.current) {
-                  leftFileInputRef.current.value = '';
-                }
-              }}
-              placeholder="Cole ou digite o texto original..."
-              {...register('leftText')}
+            <Controller
+              name="leftText"
+              control={control}
+              render={({ field }) => (
+                <DiffEditorPanel
+                  title="Original"
+                  badge="A"
+                  fileName={leftFileName}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  onImport={() => leftFileInputRef.current?.click()}
+                  onClear={() => {
+                    setLeftFileName(null);
+                    setValue('leftText', '');
+                    diffMutation.reset();
+                    if (leftFileInputRef.current) {
+                      leftFileInputRef.current.value = '';
+                    }
+                  }}
+                  placeholder="Cole ou importe o texto/código de referência..."
+                />
+              )}
             />
             <input
               ref={leftFileInputRef}
@@ -121,19 +143,29 @@ export function TextDiffTool() {
           </div>
 
           <div>
-            <DiffEditorPanel
-              title="Texto de comparação"
-              fileName={rightFileName}
-              onImport={() => rightFileInputRef.current?.click()}
-              onClear={() => {
-                setRightFileName(null);
-                setValue('rightText', '');
-                if (rightFileInputRef.current) {
-                  rightFileInputRef.current.value = '';
-                }
-              }}
-              placeholder="Cole ou digite o texto para comparar..."
-              {...register('rightText')}
+            <Controller
+              name="rightText"
+              control={control}
+              render={({ field }) => (
+                <DiffEditorPanel
+                  title="Comparação"
+                  badge="B"
+                  fileName={rightFileName}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  onImport={() => rightFileInputRef.current?.click()}
+                  onClear={() => {
+                    setRightFileName(null);
+                    setValue('rightText', '');
+                    diffMutation.reset();
+                    if (rightFileInputRef.current) {
+                      rightFileInputRef.current.value = '';
+                    }
+                  }}
+                  placeholder="Cole ou importe a versão alterada..."
+                />
+              )}
             />
             <input
               ref={rightFileInputRef}
@@ -145,120 +177,135 @@ export function TextDiffTool() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-5 rounded-md border border-zinc-200 p-4 dark:border-zinc-800 sm:grid-cols-3">
-          <label className="flex cursor-pointer items-start gap-2 rounded-md border border-zinc-200 px-3 py-2.5 text-sm text-zinc-700 dark:border-zinc-800 dark:text-zinc-300">
-            <input type="checkbox" className="mt-0.5 size-4 rounded border-zinc-300" {...register('ignoreWhitespace')} />
-            <span>
+        <div className="studio-panel flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-3 py-2 text-xs font-medium text-[var(--ink-secondary)]">
+              <input
+                type="checkbox"
+                className="size-4 rounded"
+                {...register('ignoreWhitespace')}
+              />
               Ignorar espaços
-              <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
-                Remove espaços ao comparar.
-              </span>
-            </span>
-          </label>
+            </label>
 
-          <label className="flex cursor-pointer items-start gap-2 rounded-md border border-zinc-200 px-3 py-2.5 text-sm text-zinc-700 dark:border-zinc-800 dark:text-zinc-300">
-            <input type="checkbox" className="mt-0.5 size-4 rounded border-zinc-300" {...register('ignoreLineBreaks')} />
-            <span>
-              Normalizar quebras
-              <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
-                Trata CRLF e LF como iguais.
-              </span>
-            </span>
-          </label>
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-3 py-2 text-xs font-medium text-[var(--ink-secondary)]">
+              <input
+                type="checkbox"
+                className="size-4 rounded"
+                {...register('ignoreLineBreaks')}
+              />
+              Normalizar CRLF/LF
+            </label>
 
-          <label className="flex cursor-pointer items-start gap-2 rounded-md border border-zinc-200 px-3 py-2.5 text-sm text-zinc-700 dark:border-zinc-800 dark:text-zinc-300">
-            <input type="checkbox" className="mt-0.5 size-4 rounded border-zinc-300" {...register('ignoreCase')} />
-            <span>
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-3 py-2 text-xs font-medium text-[var(--ink-secondary)]">
+              <input
+                type="checkbox"
+                className="size-4 rounded"
+                {...register('ignoreCase')}
+              />
               Ignorar maiúsculas
-              <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
-                Compara sem diferenciar A/a.
-              </span>
-            </span>
-          </label>
-        </div>
+            </label>
+          </div>
 
-        <Button
-          type="submit"
-          fullWidth
-          loading={diffMutation.isPending}
-          disabled={!leftText.trim() && !rightText.trim()}
-        >
-          <GitDiff size={16} aria-hidden="true" />
-          Comparar textos
-        </Button>
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={!leftText && !rightText}
+              onClick={handleSwapSides}
+            >
+              <ArrowsLeftRight size={15} aria-hidden="true" />
+              Inverter A ↔ B
+            </Button>
+
+            <Button
+              type="submit"
+              loading={diffMutation.isPending}
+              disabled={!leftText.trim() && !rightText.trim()}
+            >
+              <GitDiff size={16} aria-hidden="true" />
+              Comparar textos
+            </Button>
+          </div>
+        </div>
       </form>
 
-      {activeError && (
-        <p
-          role="alert"
-          className="rounded-md border border-zinc-400 bg-zinc-100 px-3 py-2.5 text-sm leading-relaxed text-zinc-800 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"
-        >
-          {activeError}
-        </p>
-      )}
+      {activeError && <StudioAlert variant="error">{activeError}</StudioAlert>}
 
       {result && (
-        <section className="space-y-4">
-          {result.identical ? (
-            <div className="flex items-start gap-3 rounded-md border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
-              <CheckCircle size={20} aria-hidden="true" className="mt-0.5 shrink-0" />
-              <div>
-                <p className="font-medium">Sem diferenças</p>
-                <p className="mt-1 leading-relaxed text-emerald-800 dark:text-emerald-200">
-                  Os textos são idênticos com as opções selecionadas ({result.stats.unchanged} linha
-                  {result.stats.unchanged === 1 ? '' : 's'} conferida
-                  {result.stats.unchanged === 1 ? '' : 's'}).
-                </p>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500 sm:text-xs">
-                    Resultado
-                  </h2>
-                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                    {result.stats.added} adicionada(s) · {result.stats.removed} removida(s) ·{' '}
-                    {result.stats.modified} modificada(s) · {result.stats.unchanged} igual(is)
-                  </p>
-                </div>
-
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <button
-                    type="button"
-                    onClick={() => downloadText(result.html, 'diff.html', 'text/html')}
-                    className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-md border border-zinc-950 bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white transition-transform duration-150 ease-out hover:bg-zinc-800 active:scale-[0.97] dark:border-zinc-50 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
-                  >
-                    <DownloadSimple size={16} aria-hidden="true" />
-                    Exportar HTML
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => downloadText(result.unified, 'diff.patch', 'text/plain')}
-                    className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
-                  >
-                    <DownloadSimple size={16} aria-hidden="true" />
-                    Exportar diff
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-3 text-xs text-zinc-600 dark:text-zinc-400">
-                <span className="inline-flex items-center gap-2">
-                  <span className="size-3 rounded-sm bg-red-200 dark:bg-red-900/70" aria-hidden="true" />
-                  Caractere removido
+        <StudioPanel
+          title="Resultado da comparação"
+          badge={
+            !result.identical ? (
+              <div className="flex flex-wrap items-center gap-1.5 font-mono text-[11px]">
+                <span className="rounded bg-emerald-500/12 px-1.5 py-0.5 text-emerald-700 dark:text-emerald-300">
+                  +{result.stats.added}
                 </span>
-                <span className="inline-flex items-center gap-2">
-                  <span className="size-3 rounded-sm bg-emerald-200 dark:bg-emerald-900/70" aria-hidden="true" />
-                  Caractere adicionado
+                <span className="rounded bg-red-500/12 px-1.5 py-0.5 text-red-700 dark:text-red-300">
+                  -{result.stats.removed}
+                </span>
+                <span className="rounded bg-amber-500/12 px-1.5 py-0.5 text-amber-800 dark:text-amber-300">
+                  ~{result.stats.modified}
+                </span>
+                <span className="rounded bg-[var(--bg-subtle)] px-1.5 py-0.5 text-[var(--ink-muted)]">
+                  ={result.stats.unchanged}
                 </span>
               </div>
-            </>
-          )}
+            ) : undefined
+          }
+          actions={
+            !result.identical ? (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => downloadText(result.html, 'diff.html', 'text/html')}
+                >
+                  <DownloadSimple size={14} aria-hidden="true" />
+                  HTML
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => downloadText(result.unified, 'diff.patch', 'text/plain')}
+                >
+                  <DownloadSimple size={14} aria-hidden="true" />
+                  Patch (.patch)
+                </Button>
+              </>
+            ) : undefined
+          }
+        >
+          <div className="space-y-4">
+            {result.identical ? (
+              <StudioAlert variant="success" title="Conteúdos equivalentes">
+                Nenhuma diferença encontrada com os filtros ativos ({result.stats.unchanged}{' '}
+                {result.stats.unchanged === 1 ? 'linha verificada' : 'linhas verificadas'}).
+              </StudioAlert>
+            ) : (
+              <div className="flex flex-wrap items-center gap-4 text-xs text-[var(--ink-muted)]">
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className="size-2.5 rounded-xs bg-red-300 dark:bg-red-800"
+                    aria-hidden="true"
+                  />
+                  Trecho removido
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className="size-2.5 rounded-xs bg-emerald-300 dark:bg-emerald-800"
+                    aria-hidden="true"
+                  />
+                  Trecho adicionado
+                </span>
+              </div>
+            )}
 
-          <DiffPanel rows={result.rows} />
-        </section>
+            <DiffPanel rows={result.rows} />
+          </div>
+        </StudioPanel>
       )}
     </div>
   );

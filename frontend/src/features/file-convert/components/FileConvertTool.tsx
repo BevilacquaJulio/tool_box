@@ -9,7 +9,10 @@ const DocumentConvertTool = lazy(async () => {
 
 function ModeLoadingState() {
   return (
-    <p className="text-sm text-zinc-500 dark:text-zinc-400">Carregando modo de documentos...</p>
+    <div className="grid grid-cols-1 gap-5 animate-pulse lg:grid-cols-2">
+      <div className="studio-panel h-72 p-5" />
+      <div className="studio-panel h-72 p-5" />
+    </div>
   );
 }
 
@@ -17,7 +20,7 @@ export function FileConvertTool() {
   const [mode, setMode] = useState<ConvertMode>('images');
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <ConvertModeSelector value={mode} onChange={setMode} />
 
       {mode === 'images' ? (

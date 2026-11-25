@@ -4,8 +4,8 @@ import { HashTool } from '../features/hash/components/HashTool';
 export function HashToolPage() {
   return (
     <ToolPageLayout
-      title="Identificar e gerar hash de senha"
-      description="Identifique o algoritmo de um hash e gere outro no mesmo formato a partir de uma senha. Todo o processamento acontece localmente no navegador."
+      title="Hash de senha"
+      description="Inspecione algoritmos e parâmetros de custo (bcrypt, Argon2, scrypt, PBKDF2, phpass, SHA) e gere novos hashes compatíveis."
     >
       <HashTool />
     </ToolPageLayout>

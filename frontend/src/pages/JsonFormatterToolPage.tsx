@@ -5,7 +5,7 @@ export function JsonFormatterToolPage() {
   return (
     <ToolPageLayout
       title="JSON Formatter"
-      description="Formate, minifique, valide e converta dados entre JSON, YAML, XML e CSV. Os erros indicam a linha e a coluna para facilitar a correção."
+      description="Formate, minifique, valide, ordene chaves e converta estruturas entre JSON, YAML, XML e CSV com diagnóstico de linha e coluna."
     >
       <JsonFormatterTool />
     </ToolPageLayout>

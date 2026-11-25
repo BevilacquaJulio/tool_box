@@ -8,10 +8,10 @@ export function ProgressBar({ value, label }: ProgressBarProps) {
   const rounded = Math.round(clamped);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3">
       <div className="flex items-center justify-between gap-3 text-xs">
-        <span className="text-zinc-600 dark:text-zinc-400">{label}</span>
-        <span className="font-mono tabular-nums text-zinc-500 dark:text-zinc-400">{rounded}%</span>
+        <span className="font-medium text-[var(--ink-secondary)]">{label}</span>
+        <span className="font-mono tabular-nums text-[var(--accent)]">{rounded}%</span>
       </div>
       <div
         role="progressbar"
@@ -19,10 +19,10 @@ export function ProgressBar({ value, label }: ProgressBarProps) {
         aria-valuemax={100}
         aria-valuenow={rounded}
         aria-label={label}
-        className="h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800"
+        className="h-1.5 overflow-hidden rounded-full bg-[var(--border-strong)]"
       >
         <div
-          className="h-full rounded-full bg-zinc-950 transition-[width] duration-300 ease-out dark:bg-zinc-50"
+          className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-200 ease-out"
           style={{ width: `${clamped}%` }}
         />
       </div>

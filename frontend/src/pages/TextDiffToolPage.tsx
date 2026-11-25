@@ -4,8 +4,8 @@ import { TextDiffTool } from '../features/text-diff/components/TextDiffTool';
 export function TextDiffToolPage() {
   return (
     <ToolPageLayout
-      title="Diff de textos e códigos"
-      description="Compare textos ou arquivos lado a lado e destaque linhas adicionadas, removidas ou alteradas. Inclui realce de sintaxe, opções para ignorar espaços e exportação."
+      title="Comparador de textos"
+      description="Compare arquivos e trechos de código lado a lado com destaque por caractere, filtros de normalização e exportação HTML ou patch."
     >
       <TextDiffTool />
     </ToolPageLayout>

@@ -5,7 +5,7 @@ export function QrCodeToolPage() {
   return (
     <ToolPageLayout
       title="QR Code"
-      description="Crie QR Codes para URLs, textos, Wi-Fi, Pix, contatos, e-mails e telefones. Personalize o tamanho e a correção de erros e exporte em PNG ou SVG."
+      description="Codifique URLs, textos, redes Wi-Fi, chaves Pix, cartões vCard, e-mails e telefones para exportação em PNG ou SVG."
     >
       <QrCodeTool />
     </ToolPageLayout>

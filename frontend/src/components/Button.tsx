@@ -2,13 +2,15 @@ import type { ButtonHTMLAttributes } from 'react';
 import { CircleNotch } from '@phosphor-icons/react';
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'ghost';
+  size?: 'sm' | 'md';
   loading?: boolean;
   fullWidth?: boolean;
 };
 
 export function Button({
   variant = 'primary',
+  size = 'md',
   loading = false,
   fullWidth = false,
   disabled,
@@ -17,29 +19,40 @@ export function Button({
   ...props
 }: ButtonProps) {
   const base =
-    'focus-ring inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-[transform,background-color,border-color,box-shadow] duration-150 ease-out active:scale-[0.97] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-45';
+    'focus-ring inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg font-semibold whitespace-nowrap transition-[transform,background-color,border-color,color,box-shadow] duration-150 ease-out active:scale-[0.985] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-45';
+
+  const sizes = {
+    sm: 'min-h-9 px-3 py-1.5 text-xs',
+    md: 'min-h-10.5 px-4 py-2.5 text-sm',
+  };
 
   const variants = {
     primary:
-      'border border-brand-600 bg-brand-600 text-white shadow-[0_10px_30px_rgba(20,91,255,0.2)] hover:border-brand-700 hover:bg-brand-700 dark:border-brand-500 dark:bg-brand-500 dark:hover:border-brand-400 dark:hover:bg-brand-400',
+      'border border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-contrast)] shadow-xs hover:border-[var(--accent-hover)] hover:bg-[var(--accent-hover)]',
+    secondary:
+      'border border-zinc-900 bg-zinc-900 text-white hover:border-zinc-800 hover:bg-zinc-800 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:border-white dark:hover:bg-white',
     ghost:
-      'border border-zinc-300 bg-white/65 text-zinc-950 hover:border-brand-300 hover:bg-brand-50 dark:border-zinc-700 dark:bg-zinc-950/40 dark:text-zinc-50 dark:hover:border-brand-700 dark:hover:bg-brand-950/45',
+      'border border-[var(--border-strong)] bg-[var(--bg-panel)] text-[var(--ink)] hover:border-[var(--accent-border)] hover:bg-[var(--bg-subtle)]',
   };
 
-  const widthClass = fullWidth ? 'w-full sm:w-auto' : '';
+  const widthClass = fullWidth ? 'w-full' : '';
 
   return (
     <button
       type="button"
       disabled={disabled || loading}
       aria-busy={loading}
-      className={`${base} ${variants[variant]} ${widthClass} ${className}`}
+      className={`${base} ${sizes[size]} ${variants[variant]} ${widthClass} ${className}`}
       {...props}
     >
       {loading ? (
         <>
-          <CircleNotch size={17} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
-          Processando
+          <CircleNotch
+            size={16}
+            className="animate-spin motion-reduce:animate-none"
+            aria-hidden="true"
+          />
+          Processando...
         </>
       ) : (
         children
