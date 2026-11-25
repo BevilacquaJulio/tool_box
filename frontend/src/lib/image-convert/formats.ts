@@ -49,8 +49,29 @@ const RAW_EXTENSIONS = new Set([
   'x3f',
 ]);
 
+const STANDARD_IMAGE_EXTENSIONS = new Set([
+  'png',
+  'jpg',
+  'jpeg',
+  'jfif',
+  'pjpeg',
+  'pjp',
+  'webp',
+  'avif',
+  'bmp',
+  'gif',
+  'svg',
+  'ico',
+  'tif',
+  'tiff',
+]);
+
 function getExtension(file: File): string | undefined {
-  return file.name.split('.').pop()?.toLowerCase();
+  const dotIndex = file.name.lastIndexOf('.');
+  if (dotIndex <= 0 || dotIndex === file.name.length - 1) {
+    return undefined;
+  }
+  return file.name.slice(dotIndex + 1).toLowerCase();
 }
 
 export function isHeicExtension(file: File): boolean {
@@ -66,6 +87,19 @@ export function isHeicExtension(file: File): boolean {
 export function isRawExtension(file: File): boolean {
   const extension = getExtension(file);
   return extension ? RAW_EXTENSIONS.has(extension) : false;
+}
+
+export function isSupportedImage(file: File): boolean {
+  if (isHeicExtension(file) || isRawExtension(file)) {
+    return true;
+  }
+
+  const extension = getExtension(file);
+  if (extension && STANDARD_IMAGE_EXTENSIONS.has(extension)) {
+    return true;
+  }
+
+  return file.type.toLowerCase().startsWith('image/');
 }
 
 export function detectImageFormat(file: File): string {
@@ -94,5 +128,8 @@ export function getDecodeHint(file: File): string {
   return 'Carregando pré-visualização...';
 }
 
-export const IMAGE_FILE_ACCEPT =
-  'image/*,.heic,.heif,.hif,.arw,.cr2,.cr3,.nef,.dng,.raf,.rw2,.orf,.srw,.pef,.raw,.x3f';
+export const IMAGE_FILE_ACCEPT = [
+  'image/*',
+  ...Array.from(HEIC_EXTENSIONS, (ext) => `.${ext}`),
+  ...Array.from(RAW_EXTENSIONS, (ext) => `.${ext}`),
+].join(',');

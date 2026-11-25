@@ -12,22 +12,40 @@ const EXTENSION_TO_KIND: Record<string, DocumentKind> = {
   html: 'html',
   htm: 'html',
   xlsx: 'xlsx',
+  xls: 'xlsx',
+  xlsm: 'xlsx',
+  xlsb: 'xlsx',
+  ods: 'xlsx',
   csv: 'csv',
+  tsv: 'csv',
   json: 'json',
   xml: 'xml',
 };
 
 export const DOCUMENT_FILE_ACCEPT =
-  '.pdf,.docx,.odt,.rtf,.txt,.md,.markdown,.html,.htm,.xlsx,.csv,.json,.xml,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text,application/rtf,text/rtf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/markdown,text/html,text/csv,application/json,application/xml,text/xml';
+  '.pdf,.docx,.odt,.rtf,.txt,.md,.markdown,.html,.htm,.xlsx,.xls,.xlsm,.xlsb,.ods,.csv,.tsv,.json,.xml,application/pdf,application/x-pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text,application/rtf,text/rtf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/vnd.oasis.opendocument.spreadsheet,text/plain,text/markdown,text/html,text/csv,text/tab-separated-values,application/json,application/xml,text/xml';
+
+function getExtension(file: File): string | undefined {
+  const dotIndex = file.name.lastIndexOf('.');
+  if (dotIndex <= 0 || dotIndex === file.name.length - 1) {
+    return undefined;
+  }
+  return file.name.slice(dotIndex + 1).toLowerCase();
+}
 
 export function detectDocumentKind(file: File): DocumentKind {
-  const extension = file.name.split('.').pop()?.toLowerCase();
+  const extension = getExtension(file);
   if (extension && extension in EXTENSION_TO_KIND) {
     return EXTENSION_TO_KIND[extension];
   }
 
   const mime = file.type.toLowerCase();
-  if (mime === 'application/pdf') {
+  if (
+    mime === 'application/pdf' ||
+    mime === 'application/x-pdf' ||
+    mime === 'application/acrobat' ||
+    mime === 'application/vnd.pdf'
+  ) {
     return 'pdf';
   }
   if (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
@@ -39,13 +57,18 @@ export function detectDocumentKind(file: File): DocumentKind {
   if (mime === 'application/rtf' || mime === 'text/rtf') {
     return 'rtf';
   }
-  if (mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+  if (
+    mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    mime === 'application/vnd.ms-excel' ||
+    mime === 'application/vnd.ms-excel.sheet.macroenabled.12' ||
+    mime === 'application/vnd.oasis.opendocument.spreadsheet'
+  ) {
     return 'xlsx';
   }
-  if (mime === 'text/csv') {
+  if (mime === 'text/csv' || mime === 'text/tab-separated-values') {
     return 'csv';
   }
-  if (mime === 'application/json') {
+  if (mime === 'application/json' || mime === 'text/json') {
     return 'json';
   }
   if (mime === 'application/xml' || mime === 'text/xml') {

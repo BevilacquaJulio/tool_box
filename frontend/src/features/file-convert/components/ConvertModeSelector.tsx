@@ -24,7 +24,7 @@ const modes: Array<{
   {
     value: 'documents',
     label: 'Documentos e planilhas',
-    description: 'PDF, Word (.docx), XLSX, CSV, Markdown, HTML, TXT, JSON e XML',
+    description: 'PDF, Word (.docx), ODT, RTF, XLSX/XLS, CSV/TSV, Markdown, HTML, TXT, JSON e XML',
     icon: <File size={18} weight="duotone" aria-hidden="true" />,
   },
 ];

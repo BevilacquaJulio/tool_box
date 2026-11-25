@@ -7,9 +7,19 @@ export type ImageFileEntry = {
   fileSize: number;
 };
 
+let fallbackIdCounter = 0;
+
+function generateEntryId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  fallbackIdCounter += 1;
+  return `img-${Date.now()}-${fallbackIdCounter}`;
+}
+
 export function createImageFileEntry(file: File): ImageFileEntry {
   return {
-    id: crypto.randomUUID(),
+    id: generateEntryId(),
     file,
     format: detectImageFormat(file),
     fileSize: file.size,

@@ -9,11 +9,13 @@ import { StudioAlert, StudioEmptyState, StudioPanel } from '../../../components/
 import { ProgressBar } from '../../../components/ProgressBar';
 import { TOOL_GRID_CLASS } from '../../../layout/content';
 import { getErrorMessage } from '../../../lib/errors';
+import { ALL_CONVERTER_FILE_ACCEPT, isFileDragEvent } from '../../../lib/file-convert/intake';
 import {
   createImageFileEntries,
   formatFileSize,
   IMAGE_FILE_ACCEPT,
   inspectImageFile,
+  isSupportedImage,
   OUTPUT_FORMATS,
   OUTPUT_FORMAT_VALUES,
   type ConvertImagesResult,
@@ -21,6 +23,7 @@ import {
   type ImageFilePreview,
   type ImageProgressUpdate,
 } from '../../../lib/image-convert';
+import type { ConverterFileTransfer } from '../../file-convert/components/FileConvertTool';
 import { useConvertImageMutation } from '../hooks/useImageConvertMutation';
 
 const formSchema = z.object({
@@ -33,6 +36,13 @@ type SelectionState =
   | { mode: 'none' }
   | { mode: 'single'; preview: ImageFilePreview }
   | { mode: 'batch'; items: ImageFileEntry[] };
+
+type ImageConvertToolProps = {
+  incomingTransfer?: ConverterFileTransfer | null;
+  onConsumeTransfer?: (transferId: number) => void;
+  onRouteFiles?: (files: File[]) => void;
+  isFrameDragging?: boolean;
+};
 
 function SourcePreview({
   preview,
@@ -289,17 +299,28 @@ function BatchResultPanel({
   );
 }
 
-export function ImageConvertTool() {
+export function ImageConvertTool({
+  incomingTransfer,
+  onConsumeTransfer,
+  onRouteFiles,
+  isFrameDragging = false,
+}: ImageConvertToolProps = {}) {
   const convertMutation = useConvertImageMutation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selection, setSelection] = useState<SelectionState>({ mode: 'none' });
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [isLoadingSelection, setIsLoadingSelection] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
+  const [isLocalDragging, setIsLocalDragging] = useState(false);
   const [progress, setProgress] = useState<ImageProgressUpdate | null>(null);
   const resultUrlRef = useRef<string | null>(null);
   const previewUrlRef = useRef<string | null>(null);
   const progressClearTimerRef = useRef<number | null>(null);
+  const lastTransferIdRef = useRef<number | null>(null);
+  const applyIncomingFilesRef = useRef<
+    (incoming: File[], options?: { replace?: boolean }) => Promise<void>
+  >(async () => {});
+
+  const isDragging = isFrameDragging || isLocalDragging;
 
   const {
     control,
@@ -424,7 +445,17 @@ export function ImageConvertTool() {
     }
   }
 
-  async function applyIncomingFiles(incoming: File[]) {
+  function validateIncomingFiles(files: File[]): File[] {
+    const unsupported = files.filter((file) => !isSupportedImage(file));
+    if (unsupported.length > 0) {
+      throw new Error(
+        `"${unsupported[0].name}" não é uma imagem suportada. Use PNG, JPG, WebP, AVIF, BMP, GIF, SVG, HEIC/HEIF ou câmeras RAW.`,
+      );
+    }
+    return files;
+  }
+
+  async function applyIncomingFiles(incoming: File[], options?: { replace?: boolean }) {
     if (incoming.length === 0) {
       return;
     }
@@ -439,27 +470,77 @@ export function ImageConvertTool() {
       progressClearTimerRef.current = null;
     }
 
-    const merged = [...collectExistingFiles(), ...incoming];
+    try {
+      const baseFiles = options?.replace ? [] : collectExistingFiles();
+      const merged = validateIncomingFiles([...baseFiles, ...incoming]);
 
-    if (merged.length === 1) {
-      await loadSinglePreview(merged[0]);
+      if (merged.length === 1) {
+        await loadSinglePreview(merged[0]);
+        return;
+      }
+
+      revokePreviewUrl();
+      setSelection({ mode: 'batch', items: createImageFileEntries(merged) });
+      setIsLoadingSelection(false);
+    } catch (error) {
+      setSelectionError(getErrorMessage(error));
+      setIsLoadingSelection(false);
+    }
+  }
+
+  applyIncomingFilesRef.current = applyIncomingFiles;
+
+  useEffect(() => {
+    if (!incomingTransfer || incomingTransfer.targetMode !== 'images') {
       return;
     }
-
-    revokePreviewUrl();
-    setSelection({ mode: 'batch', items: createImageFileEntries(merged) });
-    setIsLoadingSelection(false);
-  }
+    if (lastTransferIdRef.current === incomingTransfer.id) {
+      return;
+    }
+    lastTransferIdRef.current = incomingTransfer.id;
+    onConsumeTransfer?.(incomingTransfer.id);
+    void applyIncomingFilesRef.current(incomingTransfer.files, {
+      replace: incomingTransfer.replace,
+    });
+  }, [incomingTransfer, onConsumeTransfer]);
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const incoming = Array.from(event.target.files ?? []);
     event.target.value = '';
+    if (incoming.length === 0) {
+      return;
+    }
+    if (onRouteFiles) {
+      onRouteFiles(incoming);
+      return;
+    }
     await applyIncomingFiles(incoming);
   }
 
-  function handleDrop(event: DragEvent<HTMLLabelElement>) {
+  function handleStandaloneDragOver(event: DragEvent<HTMLLabelElement>) {
+    if (onRouteFiles || !isFileDragEvent(event.dataTransfer)) {
+      return;
+    }
     event.preventDefault();
-    setIsDragging(false);
+    event.dataTransfer.dropEffect = 'copy';
+    setIsLocalDragging(true);
+  }
+
+  function handleStandaloneDragLeave(event: DragEvent<HTMLLabelElement>) {
+    if (onRouteFiles) {
+      return;
+    }
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setIsLocalDragging(false);
+    }
+  }
+
+  function handleStandaloneDrop(event: DragEvent<HTMLLabelElement>) {
+    if (onRouteFiles || !isFileDragEvent(event.dataTransfer)) {
+      return;
+    }
+    event.preventDefault();
+    setIsLocalDragging(false);
     const dropped = Array.from(event.dataTransfer.files ?? []);
     void applyIncomingFiles(dropped);
   }
@@ -522,26 +603,25 @@ export function ImageConvertTool() {
             {selection.mode === 'none' && !isLoadingSelection && (
               <label
                 htmlFor="image-convert-input"
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setIsDragging(true);
-                }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-                className={`flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-4 py-7 text-center transition-colors duration-150 ${
+                data-dragging={isDragging ? 'true' : 'false'}
+                onDragOver={handleStandaloneDragOver}
+                onDragLeave={handleStandaloneDragLeave}
+                onDrop={handleStandaloneDrop}
+                className={`converter-drop-zone flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-4 py-7 text-center ${
                   isDragging
                     ? 'border-[var(--accent)] bg-[var(--accent-soft)]'
                     : 'border-[var(--border-strong)] bg-[var(--bg-subtle)] hover:border-[var(--accent-border)] hover:bg-[var(--bg-panel)]'
                 }`}
               >
-                <span className="inline-flex size-11 items-center justify-center rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--accent)]">
+                <span className="pointer-events-none inline-flex size-11 items-center justify-center rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--accent)]">
                   <UploadSimple size={20} weight="duotone" aria-hidden="true" />
                 </span>
-                <span className="mt-3 text-sm font-semibold text-[var(--ink)]">
-                  Arraste imagens ou clique para selecionar
+                <span className="pointer-events-none mt-3 text-sm font-semibold text-[var(--ink)]">
+                  Arraste arquivos ou clique para selecionar
                 </span>
-                <span className="mt-1 max-w-sm text-xs leading-relaxed text-[var(--ink-muted)]">
-                  PNG, JPG, WebP, AVIF, BMP, GIF, HEIC/HEIF e câmeras RAW (CR2, NEF, ARW, DNG)
+                <span className="pointer-events-none mt-1 max-w-sm text-xs leading-relaxed text-[var(--ink-muted)]">
+                  PNG, JPG, WebP, AVIF, BMP, GIF, SVG, HEIC/HEIF e câmeras RAW — PDF e documentos
+                  alternam o modo automaticamente
                 </span>
               </label>
             )}
@@ -550,7 +630,7 @@ export function ImageConvertTool() {
               id="image-convert-input"
               ref={fileInputRef}
               type="file"
-              accept={IMAGE_FILE_ACCEPT}
+              accept={onRouteFiles ? ALL_CONVERTER_FILE_ACCEPT : IMAGE_FILE_ACCEPT}
               multiple
               onChange={(event) => void handleFileChange(event)}
               className="sr-only"

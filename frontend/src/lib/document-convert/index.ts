@@ -243,7 +243,9 @@ export async function convertDocuments(input: ConvertDocumentsInput): Promise<Co
   }
 
   if (convertedFiles.length === 0) {
-    throw new Error('Nenhum documento foi convertido. Verifique os arquivos selecionados.');
+    const detail =
+      failedFiles.length === 1 ? ` ${failedFiles[0].error}` : ' Verifique os arquivos selecionados.';
+    throw new Error(`Nenhum documento foi convertido.${detail}`);
   }
 
   onProgress?.({

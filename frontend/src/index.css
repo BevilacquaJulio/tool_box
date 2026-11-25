@@ -147,6 +147,121 @@ html.dark {
   box-shadow: var(--panel-shadow);
 }
 
+/* File converter dynamic drag-and-drop feedback */
+.converter-drop-frame {
+  position: relative;
+  isolation: isolate;
+  border-radius: 1.125rem;
+  transition:
+    box-shadow 200ms var(--ease-out),
+    transform 200ms var(--ease-out);
+}
+
+.converter-drop-frame[data-dragging='true'] {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 0 0 6px var(--accent-soft),
+    0 18px 42px -18px var(--accent);
+  transform: scale(1.003);
+}
+
+.converter-drop-overlay {
+  position: absolute;
+  inset: -4px;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  border-radius: 1.25rem;
+  border: 2px dashed var(--accent);
+  background: color-mix(in srgb, var(--bg-panel) 84%, var(--accent-soft));
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+  animation: converter-drop-enter 160ms var(--ease-out) both;
+}
+
+.converter-drop-overlay__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 27rem;
+  padding: 1.5rem 1.75rem;
+  border-radius: 1rem;
+  border: 1px solid var(--accent-border);
+  background: var(--bg-panel);
+  text-align: center;
+  box-shadow:
+    0 0 0 1px var(--accent-soft),
+    0 16px 36px -14px rgba(0, 0, 0, 0.25);
+}
+
+.converter-drop-overlay__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 1rem;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+  animation:
+    converter-drop-float 1.3s ease-in-out infinite,
+    converter-drop-ring 1.6s ease-out infinite;
+}
+
+.converter-drop-zone {
+  transition:
+    border-color 180ms var(--ease-out),
+    background-color 180ms var(--ease-out),
+    box-shadow 180ms var(--ease-out),
+    transform 180ms var(--ease-out);
+}
+
+.converter-drop-zone[data-dragging='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-border);
+}
+
+@keyframes converter-drop-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes converter-drop-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes converter-drop-ring {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent-border);
+  }
+
+  70% {
+    box-shadow: 0 0 0 12px transparent;
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
 /* Brand mark */
 .logo-mark {
   position: relative;

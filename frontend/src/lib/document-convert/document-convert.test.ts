@@ -161,8 +161,26 @@ describe('convertDocuments para PDF e Word', () => {
     if (result.type === 'single') expect(result.blob.type).toBe(mime);
   });
 
-  it('recusa PDF para PDF', async () => {
+  it('recusa PDF para PDF preservando o motivo específico no erro', async () => {
     const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
-    await expect(convertDocuments({ files: [file], outputFormat: 'pdf' })).rejects.toThrow(/Nenhum documento/);
+    await expect(convertDocuments({ files: [file], outputFormat: 'pdf' })).rejects.toThrow(
+      /Nenhum documento.*não é compatível/i,
+    );
+  });
+
+  it('converte TSV para JSON usando o pipeline de planilhas', async () => {
+    const file = new File(['nome\tidade\nAna\t30\nBeto\t25'], 'pessoas.tsv', {
+      type: 'text/tab-separated-values',
+    });
+    const result = await convertDocuments({ files: [file], outputFormat: 'json' });
+
+    expect(result.type).toBe('single');
+    expect(result.fileName).toBe('pessoas.json');
+    if (result.type === 'single') {
+      expect(JSON.parse(await result.blob.text())).toEqual([
+        { nome: 'Ana', idade: 30 },
+        { nome: 'Beto', idade: 25 },
+      ]);
+    }
   });
 });

@@ -12,15 +12,38 @@ function ensurePdfWorker() {
   }
 }
 
-async function loadPdf(file: File): Promise<PDFDocumentProxy> {
+async function withLoadedPdf<T>(
+  file: File,
+  run: (pdf: PDFDocumentProxy) => Promise<T>,
+): Promise<T> {
+  if (file.size === 0) {
+    throw new Error(`"${file.name}" está vazio e não pode ser lido como PDF.`);
+  }
+
   ensurePdfWorker();
   const buffer = await file.arrayBuffer();
-  return getDocument({ data: buffer }).promise;
+  const loadingTask = getDocument({ data: new Uint8Array(buffer) });
+
+  try {
+    const pdf = await loadingTask.promise;
+    return await run(pdf);
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.name === 'PasswordException') {
+        throw new Error(`"${file.name}" está protegido por senha. Remova a proteção antes de converter.`);
+      }
+      if (error.name === 'InvalidPDFException') {
+        throw new Error(`Não foi possível ler "${file.name}". O PDF parece inválido ou corrompido.`);
+      }
+    }
+    throw error;
+  } finally {
+    await loadingTask.destroy();
+  }
 }
 
 export async function getPdfPageCount(file: File): Promise<number> {
-  const pdf = await loadPdf(file);
-  return pdf.numPages;
+  return withLoadedPdf(file, async (pdf) => pdf.numPages);
 }
 
 async function renderPageToBlob(
@@ -90,33 +113,39 @@ export async function convertPdfFile(
   file: File,
   outputFormat: Extract<DocumentOutputFormat, 'png' | 'jpeg' | 'txt' | 'html'>,
 ): Promise<ConvertedDocumentFile[]> {
-  const pdf = await loadPdf(file);
   const baseName = buildBaseName(file.name);
 
-  if (outputFormat === 'txt') {
-    const text = await extractPdfText(pdf);
-    return [createConvertedFile(baseName, 'txt', text, 'text/plain')];
-  }
+  return withLoadedPdf(file, async (pdf) => {
+    if (outputFormat === 'txt') {
+      const text = await extractPdfText(pdf);
+      return [createConvertedFile(baseName, 'txt', text, 'text/plain')];
+    }
 
-  if (outputFormat === 'html') {
-    return [
-      createConvertedFile(baseName, 'html', wrapHtmlDocument(baseName, pdfTextToHtml(await extractPdfText(pdf))), 'text/html'),
-    ];
-  }
+    if (outputFormat === 'html') {
+      return [
+        createConvertedFile(
+          baseName,
+          'html',
+          wrapHtmlDocument(baseName, pdfTextToHtml(await extractPdfText(pdf))),
+          'text/html',
+        ),
+      ];
+    }
 
-  const mimeType = outputFormat === 'png' ? 'image/png' : 'image/jpeg';
-  const extension = outputFormat === 'png' ? 'png' : 'jpg';
-  const results: ConvertedDocumentFile[] = [];
+    const mimeType = outputFormat === 'png' ? 'image/png' : 'image/jpeg';
+    const extension = outputFormat === 'png' ? 'png' : 'jpg';
+    const results: ConvertedDocumentFile[] = [];
 
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const blob = await renderPageToBlob(pdf, pageNumber, mimeType);
-    const suffix = pdf.numPages > 1 ? `-pagina-${pageNumber}` : '';
-    results.push({
-      fileName: `${baseName}${suffix}.${extension}`,
-      blob,
-      size: blob.size,
-    });
-  }
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const blob = await renderPageToBlob(pdf, pageNumber, mimeType);
+      const suffix = pdf.numPages > 1 ? `-pagina-${pageNumber}` : '';
+      results.push({
+        fileName: `${baseName}${suffix}.${extension}`,
+        blob,
+        size: blob.size,
+      });
+    }
 
-  return results;
+    return results;
+  });
 }
