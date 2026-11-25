@@ -1,6 +1,5 @@
-import { Copy, Check } from '@phosphor-icons/react';
+import { Check, Copy } from '@phosphor-icons/react';
 import { useState } from 'react';
-import { Button } from './Button';
 
 type CopyFieldProps = {
   label: string;
@@ -17,29 +16,39 @@ export function CopyField({ label, value }: CopyFieldProps) {
   }
 
   return (
-    <div className="space-y-1.5">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{label}</span>
-        <Button
-          variant="ghost"
-          fullWidth
+    <div className="overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)]">
+      <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-[var(--bg-panel)] px-3.5 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-xs font-medium text-[var(--ink-secondary)]">{label}</span>
+          <span className="shrink-0 font-mono text-[10px] text-[var(--ink-muted)]">
+            {value.length} chars
+          </span>
+        </div>
+
+        <button
+          type="button"
           onClick={handleCopy}
-          className="shrink-0 px-2.5 py-2 text-xs sm:w-auto sm:py-1.5"
+          className={`focus-ring inline-flex min-h-7.5 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors duration-150 active:scale-[0.98] ${
+            copied
+              ? 'border-emerald-500/40 bg-emerald-500/12 text-emerald-700 dark:text-emerald-300'
+              : 'border-[var(--border-strong)] bg-[var(--bg-subtle)] text-[var(--ink-secondary)] hover:border-[var(--accent-border)] hover:text-[var(--ink)]'
+          }`}
         >
           {copied ? (
             <>
-              <Check size={14} aria-hidden="true" />
+              <Check size={13} weight="bold" aria-hidden="true" />
               Copiado
             </>
           ) : (
             <>
-              <Copy size={14} aria-hidden="true" />
+              <Copy size={13} aria-hidden="true" />
               Copiar
             </>
           )}
-        </Button>
+        </button>
       </div>
-      <pre className="max-w-full overflow-x-auto rounded-md border border-zinc-300 bg-zinc-50 p-3 font-mono text-[11px] leading-relaxed break-all whitespace-pre-wrap text-zinc-950 sm:text-xs dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50">
+
+      <pre className="max-h-80 max-w-full overflow-auto p-3.5 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap text-[var(--ink)]">
         {value}
       </pre>
     </div>

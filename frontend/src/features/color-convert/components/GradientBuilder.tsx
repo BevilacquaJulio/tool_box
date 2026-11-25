@@ -1,6 +1,9 @@
 import { ArrowDown, ArrowUp, DownloadSimple, Plus, Trash } from '@phosphor-icons/react';
 import { useMemo, useState } from 'react';
 import { AnimatedSelect } from '../../../components/AnimatedSelect';
+import { Button } from '../../../components/Button';
+import { StudioPanel } from '../../../components/PageShell';
+import { TOOL_GRID_CLASS } from '../../../layout/content';
 import {
   buildGradientOutputs,
   createDefaultGradientStops,
@@ -45,9 +48,9 @@ export function GradientBuilder({ currentColor }: GradientBuilderProps) {
   }
 
   function addStop() {
-    const fallbackColor = currentColor ? rgbaToHex(currentColor) : '#FFFFFF';
+    const fallbackColor = currentColor ? rgbaToHex(currentColor) : '#3FBAB3';
     const nextPosition =
-      stops.length === 0 ? 0 : Math.min(100, Math.round(stops[stops.length - 1].position + 10));
+      stops.length === 0 ? 0 : Math.min(100, Math.round(stops[stops.length - 1].position + 15));
 
     setStops((current) => [
       ...current,
@@ -96,179 +99,197 @@ export function GradientBuilder({ currentColor }: GradientBuilderProps) {
   }
 
   return (
-    <div className="space-y-6">
-      <AnimatedSelect
-        label="Tipo de degradê"
-        options={GRADIENT_TYPES.map((item) => ({ value: item.value, label: item.label }))}
-        value={type}
-        onChange={(value) => setType(value as GradientType)}
-      />
-
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Cores</span>
-          <button
-            type="button"
-            onClick={addStop}
-            className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
-            <Plus size={14} aria-hidden="true" />
+    <div className={TOOL_GRID_CLASS}>
+      <StudioPanel
+        title="Paradas e geometria"
+        actions={
+          <Button type="button" variant="ghost" size="sm" onClick={addStop}>
+            <Plus size={13} aria-hidden="true" />
             Adicionar cor
-          </button>
-        </div>
+          </Button>
+        }
+      >
+        <div className="space-y-5">
+          <AnimatedSelect
+            label="Tipo de degradê"
+            options={GRADIENT_TYPES.map((item) => ({ value: item.value, label: item.label }))}
+            value={type}
+            onChange={(value) => setType(value as GradientType)}
+          />
 
-        <div className="space-y-2">
-          {stops.map((stop, index) => (
-            <div
-              key={stop.id}
-              className="flex flex-col gap-2 rounded-md border border-zinc-200 p-3 dark:border-zinc-800 sm:flex-row sm:items-center"
-            >
-              <div className="flex min-w-0 flex-1 items-center gap-3">
-                <input
-                  type="color"
-                  value={stop.color.slice(0, 7)}
-                  onChange={(event) => updateStop(stop.id, { color: event.target.value.toUpperCase() })}
-                  className="h-10 w-10 shrink-0 cursor-pointer rounded-md border border-zinc-300 bg-white p-0.5 dark:border-zinc-700 dark:bg-zinc-900"
-                  aria-label={`Cor ${index + 1}`}
-                />
-                <input
-                  type="text"
-                  value={stop.color}
-                  onChange={(event) => updateStop(stop.id, { color: event.target.value })}
-                  spellCheck={false}
-                  aria-label={`Código da cor ${index + 1}`}
-                  className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm text-zinc-950 outline-none transition-[border-color,box-shadow] focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:focus:border-zinc-300 dark:focus:ring-zinc-50/10"
-                />
+          <div className="space-y-2">
+            <span className="block text-xs font-medium text-[var(--ink-secondary)]">
+              Paradas de cor ({stops.length})
+            </span>
+
+            {stops.map((stop, index) => (
+              <div
+                key={stop.id}
+                className="flex flex-col gap-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3 sm:flex-row sm:items-center"
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                  <input
+                    type="color"
+                    value={stop.color.slice(0, 7)}
+                    onChange={(event) =>
+                      updateStop(stop.id, { color: event.target.value.toUpperCase() })
+                    }
+                    className="size-9 shrink-0 cursor-pointer rounded-lg border border-[var(--border-strong)] bg-[var(--bg-panel)] p-0.5"
+                    aria-label={`Cor ${index + 1}`}
+                  />
+                  <input
+                    type="text"
+                    value={stop.color}
+                    onChange={(event) => updateStop(stop.id, { color: event.target.value })}
+                    spellCheck={false}
+                    aria-label={`Código da cor ${index + 1}`}
+                    className="min-w-0 flex-1 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-panel)] px-2.5 py-1.5 font-mono text-xs text-[var(--ink)] outline-none focus:border-[var(--accent)]"
+                  />
+                </div>
+
+                <label className="flex w-full shrink-0 flex-col gap-1 sm:w-32">
+                  <span className="font-mono text-[10px] text-[var(--ink-muted)]">
+                    Posição {stop.position}%
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={stop.position}
+                    onChange={(event) =>
+                      updateStop(stop.id, { position: Number(event.target.value) })
+                    }
+                    className="h-1.5 w-full cursor-pointer"
+                    aria-label={`Posição da cor ${index + 1}`}
+                  />
+                </label>
+
+                <div className="flex shrink-0 items-center gap-1 self-end sm:self-center">
+                  <button
+                    type="button"
+                    onClick={() => moveStop(stop.id, 'up')}
+                    disabled={index === 0}
+                    aria-label={`Mover cor ${index + 1} para cima`}
+                    className="focus-ring inline-flex size-8 cursor-pointer items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--ink-secondary)] hover:border-[var(--border-strong)] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ArrowUp size={13} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveStop(stop.id, 'down')}
+                    disabled={index === stops.length - 1}
+                    aria-label={`Mover cor ${index + 1} para baixo`}
+                    className="focus-ring inline-flex size-8 cursor-pointer items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--ink-secondary)] hover:border-[var(--border-strong)] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ArrowDown size={13} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeStop(stop.id)}
+                    disabled={stops.length <= 2}
+                    aria-label={`Remover cor ${index + 1}`}
+                    className="focus-ring inline-flex size-8 cursor-pointer items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--ink-secondary)] hover:border-[var(--border-strong)] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Trash size={13} aria-hidden="true" />
+                  </button>
+                </div>
               </div>
+            ))}
+          </div>
 
-              <label className="flex w-full shrink-0 flex-col gap-1 sm:w-36">
-                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                  Posição {stop.position}%
+          <div className="grid grid-cols-1 gap-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3.5 sm:grid-cols-3">
+            {(type === 'linear' || type === 'conic') && (
+              <label className="space-y-1.5">
+                <span className="block text-xs font-medium text-[var(--ink-secondary)]">
+                  {type === 'linear' ? 'Ângulo' : 'Rotação'}{' '}
+                  <span className="font-mono text-[var(--ink-muted)]">{angle}°</span>
                 </span>
                 <input
                   type="range"
                   min={0}
-                  max={100}
+                  max={360}
                   step={1}
-                  value={stop.position}
-                  onChange={(event) => updateStop(stop.id, { position: Number(event.target.value) })}
-                  className="h-2 w-full cursor-pointer accent-zinc-800 dark:accent-zinc-200"
-                  aria-label={`Posição da cor ${index + 1}`}
+                  value={angle}
+                  onChange={(event) => setAngle(Number(event.target.value))}
+                  className="h-1.5 w-full cursor-pointer"
+                  aria-label={
+                    type === 'linear' ? 'Direção do degradê' : 'Rotação do degradê cônico'
+                  }
                 />
               </label>
+            )}
 
-              <div className="flex shrink-0 items-center gap-1 self-end sm:self-center">
-                <button
-                  type="button"
-                  onClick={() => moveStop(stop.id, 'up')}
-                  disabled={index === 0}
-                  aria-label={`Mover cor ${index + 1} para cima`}
-                  className="inline-flex min-h-9 min-w-9 cursor-pointer items-center justify-center rounded-md border border-zinc-300 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  <ArrowUp size={14} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveStop(stop.id, 'down')}
-                  disabled={index === stops.length - 1}
-                  aria-label={`Mover cor ${index + 1} para baixo`}
-                  className="inline-flex min-h-9 min-w-9 cursor-pointer items-center justify-center rounded-md border border-zinc-300 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  <ArrowDown size={14} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => removeStop(stop.id)}
-                  disabled={stops.length <= 2}
-                  aria-label={`Remover cor ${index + 1}`}
-                  className="inline-flex min-h-9 min-w-9 cursor-pointer items-center justify-center rounded-md border border-zinc-300 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  <Trash size={14} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-          ))}
+            {(type === 'radial' || type === 'conic') && (
+              <>
+                <label className="space-y-1.5">
+                  <span className="block text-xs font-medium text-[var(--ink-secondary)]">
+                    Eixo X <span className="font-mono text-[var(--ink-muted)]">{centerX}%</span>
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={centerX}
+                    onChange={(event) => setCenterX(Number(event.target.value))}
+                    className="h-1.5 w-full cursor-pointer"
+                    aria-label="Posição horizontal do centro"
+                  />
+                </label>
+                <label className="space-y-1.5">
+                  <span className="block text-xs font-medium text-[var(--ink-secondary)]">
+                    Eixo Y <span className="font-mono text-[var(--ink-muted)]">{centerY}%</span>
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={centerY}
+                    onChange={(event) => setCenterY(Number(event.target.value))}
+                    className="h-1.5 w-full cursor-pointer"
+                    aria-label="Posição vertical do centro"
+                  />
+                </label>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      </StudioPanel>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {(type === 'linear' || type === 'conic') && (
-          <label className="space-y-1.5">
-            <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              {type === 'linear' ? 'Direção' : 'Rotação'} ({angle}°)
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={360}
-              step={1}
-              value={angle}
-              onChange={(event) => setAngle(Number(event.target.value))}
-              className="h-2 w-full cursor-pointer accent-zinc-800 dark:accent-zinc-200"
-              aria-label={type === 'linear' ? 'Direção do degradê' : 'Rotação do degradê cônico'}
+      <div className="lg:sticky lg:top-[calc(var(--topbar-height)+1.25rem)] lg:self-start">
+        <StudioPanel title="Pré-visualização e código">
+          <div className="space-y-4">
+            <div
+              className="h-28 w-full rounded-xl border border-black/10 shadow-inner dark:border-white/10"
+              style={{ backgroundImage: outputs.css }}
+              aria-label="Amostra contínua do degradê"
             />
-          </label>
-        )}
 
-        {(type === 'radial' || type === 'conic') && (
-          <>
-            <label className="space-y-1.5">
-              <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Posição X ({centerX}%)
-              </span>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={1}
-                value={centerX}
-                onChange={(event) => setCenterX(Number(event.target.value))}
-                className="h-2 w-full cursor-pointer accent-zinc-800 dark:accent-zinc-200"
-                aria-label="Posição horizontal do centro"
+            <VisualStylePreview variant="gradient" gradient={outputs.css} />
+
+            <div className="space-y-2">
+              <CopyColorRow label="CSS" value={`background-image: ${outputs.css};`} />
+              <CopyColorRow
+                label="Texto"
+                value={`background-image: ${outputs.css}; -webkit-background-clip: text; background-clip: text; color: transparent;`}
               />
-            </label>
-            <label className="space-y-1.5">
-              <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Posição Y ({centerY}%)
-              </span>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={1}
-                value={centerY}
-                onChange={(event) => setCenterY(Number(event.target.value))}
-                className="h-2 w-full cursor-pointer accent-zinc-800 dark:accent-zinc-200"
-                aria-label="Posição vertical do centro"
-              />
-            </label>
-          </>
-        )}
-      </div>
+              <CopyColorRow label="Tailwind" value={outputs.tailwind} />
+            </div>
 
-      <div className="space-y-2">
-        <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Pré-visualização</span>
-        <VisualStylePreview variant="gradient" gradient={outputs.css} />
-      </div>
-
-      <div className="space-y-2">
-        <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Formatos</span>
-        <CopyColorRow label="CSS" value={`background-image: ${outputs.css};`} />
-        <CopyColorRow
-          label="CSS texto"
-          value={`background-image: ${outputs.css}; -webkit-background-clip: text; background-clip: text; color: transparent;`}
-        />
-        <CopyColorRow label="Tailwind" value={outputs.tailwind} />
-
-        <button
-          type="button"
-          onClick={() => void handleDownloadPng()}
-          disabled={isDownloading}
-          className="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900"
-        >
-          <DownloadSimple size={16} aria-hidden="true" />
-          {isDownloading ? 'Gerando PNG...' : 'Baixar PNG'}
-        </button>
+            <Button
+              type="button"
+              variant="secondary"
+              fullWidth
+              loading={isDownloading}
+              onClick={() => void handleDownloadPng()}
+            >
+              <DownloadSimple size={16} aria-hidden="true" />
+              Exportar PNG
+            </Button>
+          </div>
+        </StudioPanel>
       </div>
     </div>
   );

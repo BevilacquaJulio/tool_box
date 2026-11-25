@@ -1,11 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { DownloadSimple, Image, Plus, Swap, Trash } from '@phosphor-icons/react';
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { DownloadSimple, Image, Plus, Swap, Trash, UploadSimple } from '@phosphor-icons/react';
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { AnimatedSelect } from '../../../components/AnimatedSelect';
 import { Button } from '../../../components/Button';
+import { StudioAlert, StudioEmptyState, StudioPanel } from '../../../components/PageShell';
 import { ProgressBar } from '../../../components/ProgressBar';
+import { TOOL_GRID_CLASS } from '../../../layout/content';
 import { getErrorMessage } from '../../../lib/errors';
 import {
   createImageFileEntries,
@@ -19,7 +21,6 @@ import {
   type ImageFilePreview,
   type ImageProgressUpdate,
 } from '../../../lib/image-convert';
-import { TOOL_GRID_CLASS } from '../../../layout/content';
 import { useConvertImageMutation } from '../hooks/useImageConvertMutation';
 
 const formSchema = z.object({
@@ -33,70 +34,68 @@ type SelectionState =
   | { mode: 'single'; preview: ImageFilePreview }
   | { mode: 'batch'; items: ImageFileEntry[] };
 
-function ResultsEmptyState() {
-  return (
-    <div className="flex min-h-[12rem] flex-col items-center justify-center rounded-md border border-dashed border-zinc-300 px-4 py-8 text-center sm:min-h-[16rem] dark:border-zinc-700">
-      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Nenhuma conversão ainda</p>
-      <p className="mt-1 max-w-[32ch] text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-        Envie uma ou mais imagens e escolha o formato de saída para converter localmente.
-      </p>
-    </div>
-  );
-}
-
 function SourcePreview({
   preview,
   onRemove,
+  onAddMore,
   disabled,
 }: {
   preview: ImageFilePreview;
   onRemove: () => void;
+  onAddMore: () => void;
   disabled?: boolean;
 }) {
   return (
-    <div className="space-y-3 rounded-md border border-zinc-200 p-4 dark:border-zinc-800">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-200">
-            {preview.file.name}
-          </p>
-          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-            {formatFileSize(preview.fileSize)} · {preview.width} x {preview.height}px
+    <div className="space-y-3.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3.5">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-[var(--ink)]">{preview.file.name}</p>
+          <p className="mt-0.5 font-mono text-xs text-[var(--ink-muted)]">
+            {formatFileSize(preview.fileSize)} · {preview.width} × {preview.height}px
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onRemove}
-          disabled={disabled}
-          aria-label={`Remover ${preview.file.name}`}
-          className="inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-        >
-          <Trash size={14} aria-hidden="true" />
-          Remover
-        </button>
+        <div className="flex items-center gap-1.5">
+          <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onAddMore}>
+            <Plus size={13} aria-hidden="true" />
+            Adicionar
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={disabled}
+            onClick={onRemove}
+            aria-label={`Remover ${preview.file.name}`}
+          >
+            <Trash size={13} aria-hidden="true" />
+            Remover
+          </Button>
+        </div>
       </div>
 
       <img
         src={preview.url}
         alt={`Pré-visualização de ${preview.file.name}`}
-        className="max-h-56 w-full rounded-md border border-zinc-200 object-contain dark:border-zinc-800"
+        className="max-h-56 w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] object-contain p-2"
       />
 
-      <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-        <div className="rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800">
-          <dt className="text-xs text-zinc-500 dark:text-zinc-400">Tipo</dt>
-          <dd className="font-mono uppercase text-zinc-950 dark:text-zinc-50">{preview.format}</dd>
+      <dl className="grid grid-cols-3 gap-2 text-xs">
+        <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-2.5 py-2">
+          <dt className="text-[10px] text-[var(--ink-muted)]">Formato</dt>
+          <dd className="mt-0.5 font-mono font-medium uppercase text-[var(--ink)]">
+            {preview.format}
+          </dd>
         </div>
-        <div className="rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800">
-          <dt className="text-xs text-zinc-500 dark:text-zinc-400">Arquivo</dt>
-          <dd className="font-mono text-zinc-950 dark:text-zinc-50">
+        <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-2.5 py-2">
+          <dt className="text-[10px] text-[var(--ink-muted)]">Tamanho</dt>
+          <dd className="mt-0.5 font-mono font-medium text-[var(--ink)]">
             {formatFileSize(preview.fileSize)}
           </dd>
         </div>
-        <div className="rounded-md border border-zinc-200 px-3 py-2 sm:col-span-2 dark:border-zinc-800">
-          <dt className="text-xs text-zinc-500 dark:text-zinc-400">Dimensões</dt>
-          <dd className="font-mono text-zinc-950 dark:text-zinc-50">
-            {preview.width} x {preview.height}px
+        <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-2.5 py-2">
+          <dt className="text-[10px] text-[var(--ink-muted)]">Resolução</dt>
+          <dd className="mt-0.5 truncate font-mono font-medium text-[var(--ink)]">
+            {preview.width}×{preview.height}
           </dd>
         </div>
       </dl>
@@ -120,47 +119,39 @@ function SourceFileList({
   const totalSize = items.reduce((sum, item) => sum + item.fileSize, 0);
 
   return (
-    <div className="space-y-3 rounded-md border border-zinc-200 p-4 dark:border-zinc-800">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="space-y-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3.5">
+      <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
-            {items.length} arquivos selecionados
+          <p className="text-sm font-medium text-[var(--ink)]">
+            {items.length} imagens na fila
           </p>
-          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="mt-0.5 font-mono text-xs text-[var(--ink-muted)]">
             Total: {formatFileSize(totalSize)}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={onAddMore}
-            disabled={disabled}
-            className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-          >
-            <Plus size={14} aria-hidden="true" />
-            Adicionar mais
-          </button>
-          <button
-            type="button"
-            onClick={onClearAll}
-            disabled={disabled}
-            className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-          >
-            <Trash size={14} aria-hidden="true" />
-            Limpar tudo
-          </button>
+        <div className="flex flex-wrap gap-1.5">
+          <Button type="button" variant="ghost" size="sm" onClick={onAddMore} disabled={disabled}>
+            <Plus size={13} aria-hidden="true" />
+            Adicionar
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={onClearAll} disabled={disabled}>
+            <Trash size={13} aria-hidden="true" />
+            Limpar fila
+          </Button>
         </div>
       </div>
 
-      <ul className="divide-y divide-zinc-200 rounded-md border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+      <ul className="max-h-60 divide-y divide-[var(--border-subtle)] overflow-y-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)]">
         {items.map((item) => (
           <li
             key={item.id}
-            className="flex items-center justify-between gap-3 px-3 py-2.5 sm:px-4"
+            className="flex items-center justify-between gap-3 px-3 py-2"
           >
             <div className="min-w-0">
-              <p className="truncate text-sm text-zinc-800 dark:text-zinc-200">{item.file.name}</p>
-              <p className="mt-0.5 font-mono text-xs uppercase text-zinc-500 dark:text-zinc-400">
+              <p className="truncate text-xs font-medium text-[var(--ink)] sm:text-sm">
+                {item.file.name}
+              </p>
+              <p className="mt-0.5 font-mono text-[11px] uppercase text-[var(--ink-muted)]">
                 {item.format} · {formatFileSize(item.fileSize)}
               </p>
             </div>
@@ -169,10 +160,9 @@ function SourceFileList({
               onClick={() => onRemove(item.id)}
               disabled={disabled}
               aria-label={`Remover ${item.file.name}`}
-              className="inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+              className="focus-ring inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-[var(--border-subtle)] text-[var(--ink-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--ink)] disabled:opacity-40"
             >
               <Trash size={14} aria-hidden="true" />
-              Remover
             </button>
           </li>
         ))}
@@ -181,28 +171,36 @@ function SourceFileList({
   );
 }
 
-function SingleResultPanel({ result }: { result: Extract<ConvertImagesResult, { type: 'single' }> }) {
+function SingleResultPanel({
+  result,
+}: {
+  result: Extract<ConvertImagesResult, { type: 'single' }>;
+}) {
   return (
-    <div className="space-y-4 rounded-md border border-zinc-200 p-4 sm:p-5 dark:border-zinc-800">
+    <div className="space-y-4">
       <img
         src={result.url}
         alt={`Pré-visualização convertida para ${result.format.toUpperCase()}`}
-        className="max-h-64 w-full rounded-md border border-zinc-200 object-contain dark:border-zinc-800"
+        className="max-h-64 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] object-contain p-3"
       />
 
-      <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-        <div className="rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800">
-          <dt className="text-xs text-zinc-500 dark:text-zinc-400">Formato</dt>
-          <dd className="font-mono uppercase text-zinc-950 dark:text-zinc-50">{result.format}</dd>
+      <dl className="grid grid-cols-3 gap-2 text-xs">
+        <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-3 py-2">
+          <dt className="text-[10px] text-[var(--ink-muted)]">Saída</dt>
+          <dd className="mt-0.5 font-mono font-medium uppercase text-[var(--ink)]">
+            {result.format}
+          </dd>
         </div>
-        <div className="rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800">
-          <dt className="text-xs text-zinc-500 dark:text-zinc-400">Tamanho</dt>
-          <dd className="font-mono text-zinc-950 dark:text-zinc-50">{formatFileSize(result.size)}</dd>
+        <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-3 py-2">
+          <dt className="text-[10px] text-[var(--ink-muted)]">Tamanho</dt>
+          <dd className="mt-0.5 font-mono font-medium text-[var(--ink)]">
+            {formatFileSize(result.size)}
+          </dd>
         </div>
-        <div className="rounded-md border border-zinc-200 px-3 py-2 sm:col-span-2 dark:border-zinc-800">
-          <dt className="text-xs text-zinc-500 dark:text-zinc-400">Dimensões</dt>
-          <dd className="font-mono text-zinc-950 dark:text-zinc-50">
-            {result.width} x {result.height}px
+        <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-3 py-2">
+          <dt className="text-[10px] text-[var(--ink-muted)]">Resolução</dt>
+          <dd className="mt-0.5 truncate font-mono font-medium text-[var(--ink)]">
+            {result.width}×{result.height}
           </dd>
         </div>
       </dl>
@@ -210,7 +208,7 @@ function SingleResultPanel({ result }: { result: Extract<ConvertImagesResult, { 
       <a
         href={result.url}
         download={result.fileName}
-        className="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-zinc-950 bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white transition-transform duration-150 ease-out hover:bg-zinc-800 active:scale-[0.97] dark:border-zinc-50 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200 sm:min-h-0"
+        className="focus-ring inline-flex min-h-10.5 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-[var(--accent)] bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--accent-contrast)] transition-colors hover:bg-[var(--accent-hover)] active:scale-[0.985]"
       >
         <DownloadSimple size={16} aria-hidden="true" />
         Baixar {result.fileName}
@@ -219,36 +217,44 @@ function SingleResultPanel({ result }: { result: Extract<ConvertImagesResult, { 
   );
 }
 
-function BatchResultPanel({ result }: { result: Extract<ConvertImagesResult, { type: 'batch' }> }) {
+function BatchResultPanel({
+  result,
+}: {
+  result: Extract<ConvertImagesResult, { type: 'batch' }>;
+}) {
   return (
-    <div className="space-y-4 rounded-md border border-zinc-200 p-4 sm:p-5 dark:border-zinc-800">
-      <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-        <div className="rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800">
-          <dt className="text-xs text-zinc-500 dark:text-zinc-400">Arquivos convertidos</dt>
-          <dd className="font-mono text-zinc-950 dark:text-zinc-50">{result.successCount}</dd>
+    <div className="space-y-4">
+      <dl className="grid grid-cols-3 gap-2 text-xs">
+        <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-3 py-2">
+          <dt className="text-[10px] text-[var(--ink-muted)]">Convertidos</dt>
+          <dd className="mt-0.5 font-mono font-medium text-[var(--ink)]">{result.successCount}</dd>
         </div>
-        <div className="rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800">
-          <dt className="text-xs text-zinc-500 dark:text-zinc-400">Tamanho do ZIP</dt>
-          <dd className="font-mono text-zinc-950 dark:text-zinc-50">{formatFileSize(result.size)}</dd>
+        <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-3 py-2">
+          <dt className="text-[10px] text-[var(--ink-muted)]">Pacote ZIP</dt>
+          <dd className="mt-0.5 font-mono font-medium text-[var(--ink)]">
+            {formatFileSize(result.size)}
+          </dd>
         </div>
-        <div className="rounded-md border border-zinc-200 px-3 py-2 sm:col-span-2 dark:border-zinc-800">
-          <dt className="text-xs text-zinc-500 dark:text-zinc-400">Formato de saída</dt>
-          <dd className="font-mono uppercase text-zinc-950 dark:text-zinc-50">{result.format}</dd>
+        <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-3 py-2">
+          <dt className="text-[10px] text-[var(--ink-muted)]">Formato</dt>
+          <dd className="mt-0.5 font-mono font-medium uppercase text-[var(--ink)]">
+            {result.format}
+          </dd>
         </div>
       </dl>
 
-      <div className="rounded-md border border-zinc-200 dark:border-zinc-800">
-        <p className="border-b border-zinc-200 px-3 py-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-          Conteúdo do ZIP
+      <div className="overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)]">
+        <p className="border-b border-[var(--border-subtle)] px-3.5 py-2 font-mono text-[10px] font-medium uppercase tracking-wider text-[var(--ink-muted)]">
+          Arquivos no ZIP
         </p>
-        <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+        <ul className="max-h-56 divide-y divide-[var(--border-subtle)] overflow-y-auto">
           {result.items.map((item) => (
             <li
               key={item.fileName}
-              className="flex items-center justify-between gap-3 px-3 py-2 text-sm sm:px-4"
+              className="flex items-center justify-between gap-3 px-3.5 py-2 text-xs"
             >
-              <span className="truncate font-mono text-zinc-800 dark:text-zinc-200">{item.fileName}</span>
-              <span className="shrink-0 font-mono text-xs text-zinc-500 dark:text-zinc-400">
+              <span className="truncate font-mono text-[var(--ink)]">{item.fileName}</span>
+              <span className="shrink-0 font-mono text-[var(--ink-muted)]">
                 {formatFileSize(item.size)}
               </span>
             </li>
@@ -257,28 +263,27 @@ function BatchResultPanel({ result }: { result: Extract<ConvertImagesResult, { t
       </div>
 
       {result.failed.length > 0 && (
-        <div
-          role="alert"
-          className="rounded-md border border-zinc-400 bg-zinc-100 px-3 py-2.5 text-sm leading-relaxed text-zinc-800 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"
+        <StudioAlert
+          variant="warning"
+          title={`${result.failed.length} arquivo(s) não convertido(s)`}
         >
-          <p className="font-medium">{result.failed.length} arquivo(s) não convertido(s):</p>
-          <ul className="mt-2 space-y-1 text-xs">
+          <ul className="mt-1 space-y-1">
             {result.failed.map((item) => (
               <li key={item.fileName}>
                 {item.fileName}: {item.error}
               </li>
             ))}
           </ul>
-        </div>
+        </StudioAlert>
       )}
 
       <a
         href={result.url}
         download={result.fileName}
-        className="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-zinc-950 bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white transition-transform duration-150 ease-out hover:bg-zinc-800 active:scale-[0.97] dark:border-zinc-50 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200 sm:min-h-0"
+        className="focus-ring inline-flex min-h-10.5 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-[var(--accent)] bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--accent-contrast)] transition-colors hover:bg-[var(--accent-hover)] active:scale-[0.985]"
       >
         <DownloadSimple size={16} aria-hidden="true" />
-        Baixar pasta ZIP ({result.fileName})
+        Baixar pacote ZIP ({result.fileName})
       </a>
     </div>
   );
@@ -290,6 +295,7 @@ export function ImageConvertTool() {
   const [selection, setSelection] = useState<SelectionState>({ mode: 'none' });
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [isLoadingSelection, setIsLoadingSelection] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [progress, setProgress] = useState<ImageProgressUpdate | null>(null);
   const resultUrlRef = useRef<string | null>(null);
   const previewUrlRef = useRef<string | null>(null);
@@ -451,6 +457,13 @@ export function ImageConvertTool() {
     await applyIncomingFiles(incoming);
   }
 
+  function handleDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    setIsDragging(false);
+    const dropped = Array.from(event.dataTransfer.files ?? []);
+    void applyIncomingFiles(dropped);
+  }
+
   function handleAddMoreFiles() {
     fileInputRef.current?.click();
   }
@@ -503,29 +516,32 @@ export function ImageConvertTool() {
 
   return (
     <div className={TOOL_GRID_CLASS}>
-      <section className="space-y-6">
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500 sm:text-xs">
-          Entrada
-        </h2>
-
-        <form className="space-y-5 sm:space-y-6" onSubmit={handleSubmit(onConvert)}>
+      <StudioPanel title="Arquivos de imagem">
+        <form className="space-y-5" onSubmit={handleSubmit(onConvert)}>
           <div className="space-y-3">
-            <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Arquivos de imagem
-            </span>
-
             {selection.mode === 'none' && !isLoadingSelection && (
               <label
                 htmlFor="image-convert-input"
-                className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-zinc-300 px-4 py-6 text-center transition-colors hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:border-zinc-600 dark:hover:bg-zinc-900/50"
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={handleDrop}
+                className={`flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-4 py-7 text-center transition-colors duration-150 ${
+                  isDragging
+                    ? 'border-[var(--accent)] bg-[var(--accent-soft)]'
+                    : 'border-[var(--border-strong)] bg-[var(--bg-subtle)] hover:border-[var(--accent-border)] hover:bg-[var(--bg-panel)]'
+                }`}
               >
-                <Image size={28} aria-hidden="true" className="text-zinc-500 dark:text-zinc-400" />
-                <span className="mt-3 text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                  Clique para escolher uma ou mais imagens
+                <span className="inline-flex size-11 items-center justify-center rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] text-[var(--accent)]">
+                  <UploadSimple size={20} weight="duotone" aria-hidden="true" />
                 </span>
-                <span className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  PNG, JPG, WebP, HEIC/HEIF, RAW (ARW, CR2, NEF, DNG...) e outros suportados pelo
-                  navegador
+                <span className="mt-3 text-sm font-semibold text-[var(--ink)]">
+                  Arraste imagens ou clique para selecionar
+                </span>
+                <span className="mt-1 max-w-sm text-xs leading-relaxed text-[var(--ink-muted)]">
+                  PNG, JPG, WebP, AVIF, BMP, GIF, HEIC/HEIF e câmeras RAW (CR2, NEF, ARW, DNG)
                 </span>
               </label>
             )}
@@ -536,7 +552,7 @@ export function ImageConvertTool() {
               type="file"
               accept={IMAGE_FILE_ACCEPT}
               multiple
-              onChange={handleFileChange}
+              onChange={(event) => void handleFileChange(event)}
               className="sr-only"
             />
 
@@ -544,16 +560,13 @@ export function ImageConvertTool() {
               <ProgressBar value={progress.value} label={progress.label} />
             )}
 
-            {selectionError && (
-              <p role="alert" className="text-xs text-zinc-700 dark:text-zinc-300">
-                {selectionError}
-              </p>
-            )}
+            {selectionError && <StudioAlert variant="error">{selectionError}</StudioAlert>}
 
             {selection.mode === 'single' && !isLoadingSelection && (
               <SourcePreview
                 preview={selection.preview}
                 onRemove={clearSelectionState}
+                onAddMore={handleAddMoreFiles}
                 disabled={convertMutation.isPending}
               />
             )}
@@ -561,7 +574,7 @@ export function ImageConvertTool() {
             {selection.mode === 'batch' && (
               <SourceFileList
                 items={selection.items}
-                onRemove={handleRemoveBatchItem}
+                onRemove={(id) => void handleRemoveBatchItem(id)}
                 onAddMore={handleAddMoreFiles}
                 onClearAll={clearSelectionState}
                 disabled={convertMutation.isPending || isLoadingSelection}
@@ -574,8 +587,12 @@ export function ImageConvertTool() {
             control={control}
             render={({ field }) => (
               <AnimatedSelect
-                label="Converter para"
-                hint="WebP, PNG, JPEG, AVIF, BMP e GIF, sempre na máxima qualidade possível."
+                label="Formato de destino"
+                hint={
+                  isBatchSelection
+                    ? 'Múltiplas imagens são exportadas em um pacote ZIP único.'
+                    : 'Preserva resolução original na máxima fidelidade suportada.'
+                }
                 error={errors.outputFormat?.message}
                 options={OUTPUT_FORMATS.map((format) => ({
                   value: format.value,
@@ -587,12 +604,6 @@ export function ImageConvertTool() {
               />
             )}
           />
-
-          <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-            {isBatchSelection
-              ? 'Vários arquivos serão convertidos e entregues em um ZIP para download.'
-              : 'Mantém as dimensões originais e usa qualidade máxima. PNG e BMP preservam transparência.'}
-          </p>
 
           <Button
             type="submit"
@@ -606,31 +617,30 @@ export function ImageConvertTool() {
               : 'Converter imagem'}
           </Button>
         </form>
-      </section>
+      </StudioPanel>
 
-      <section className="space-y-4 lg:sticky lg:top-[calc(var(--header-height-compact)+1.5rem)] lg:self-start">
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500 sm:text-xs">
-          Resultado
-        </h2>
+      <div className="lg:sticky lg:top-[calc(var(--topbar-height)+1.25rem)] lg:self-start">
+        <StudioPanel title="Arquivo convertido">
+          <div className="space-y-4">
+            {!result && !activeError && !convertMutation.isPending && (
+              <StudioEmptyState
+                icon={Image}
+                title="Sem conversão processada"
+                description="Importe uma ou várias imagens ao lado e escolha o formato final para baixar."
+              />
+            )}
 
-        {!result && !activeError && !convertMutation.isPending && <ResultsEmptyState />}
+            {progress && convertMutation.isPending && (
+              <ProgressBar value={progress.value} label={progress.label} />
+            )}
 
-        {progress && convertMutation.isPending && (
-          <ProgressBar value={progress.value} label={progress.label} />
-        )}
+            {activeError && <StudioAlert variant="error">{activeError}</StudioAlert>}
 
-        {activeError && (
-          <p
-            role="alert"
-            className="rounded-md border border-zinc-400 bg-zinc-100 px-3 py-2.5 text-sm leading-relaxed text-zinc-800 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"
-          >
-            {activeError}
-          </p>
-        )}
-
-        {result?.type === 'single' && <SingleResultPanel result={result} />}
-        {result?.type === 'batch' && <BatchResultPanel result={result} />}
-      </section>
+            {result?.type === 'single' && <SingleResultPanel result={result} />}
+            {result?.type === 'batch' && <BatchResultPanel result={result} />}
+          </div>
+        </StudioPanel>
+      </div>
     </div>
   );
 }

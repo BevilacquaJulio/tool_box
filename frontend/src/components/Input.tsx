@@ -1,18 +1,33 @@
-import type { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
+import type {
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from 'react';
 
 type FieldProps = {
   label: string;
   hint?: string;
   error?: string;
+  labelTrailing?: ReactNode;
+  mono?: boolean;
 };
 
-const fieldClass =
-  'w-full rounded-xl border border-zinc-300 bg-white/82 px-3.5 py-3 text-base text-zinc-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] outline-none transition-[border-color,box-shadow,background-color] duration-150 placeholder:text-zinc-400 focus:border-brand-500 focus:bg-white focus:ring-3 focus:ring-brand-500/12 sm:text-sm dark:border-zinc-700 dark:bg-zinc-900/72 dark:text-zinc-50 dark:shadow-none dark:focus:border-brand-400 dark:focus:bg-zinc-900 dark:focus:ring-brand-400/14';
+const baseFieldClass =
+  'w-full rounded-lg border bg-[var(--bg-subtle)] px-3.5 py-2.5 text-base text-[var(--ink)] outline-none transition-[border-color,box-shadow,background-color] duration-150 placeholder:text-[var(--ink-muted)]/65 focus:bg-[var(--bg-panel)] sm:text-sm';
+
+const normalBorderClass =
+  'border-[var(--border-strong)] focus:border-[var(--accent)] focus:ring-3 focus:ring-[var(--accent-soft)]';
+
+const errorBorderClass =
+  'border-red-500/80 focus:border-red-500 focus:ring-3 focus:ring-red-500/15';
 
 export function Input({
   label,
   hint,
   error,
+  labelTrailing,
+  mono = true,
   id,
   className = '',
   ...props
@@ -21,15 +36,29 @@ export function Input({
 
   return (
     <div className="space-y-1.5">
-      <label
-        htmlFor={fieldId}
-        className="block cursor-pointer text-sm font-medium text-zinc-700 dark:text-zinc-300"
-      >
-        {label}
-      </label>
-      <input id={fieldId} className={`${fieldClass} font-mono ${className}`} {...props} />
-      {hint && !error && <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{hint}</p>}
-      {error && <p className="text-xs text-red-700 dark:text-red-300">{error}</p>}
+      <div className="flex items-center justify-between gap-2">
+        <label
+          htmlFor={fieldId}
+          className="block cursor-pointer text-xs font-medium text-[var(--ink-secondary)]"
+        >
+          {label}
+        </label>
+        {labelTrailing}
+      </div>
+      <input
+        id={fieldId}
+        aria-invalid={Boolean(error)}
+        className={`${baseFieldClass} ${error ? errorBorderClass : normalBorderClass} ${
+          mono ? 'font-mono' : ''
+        } ${className}`}
+        {...props}
+      />
+      {hint && !error && (
+        <p className="text-xs leading-relaxed text-[var(--ink-muted)]">{hint}</p>
+      )}
+      {error && (
+        <p className="text-xs font-medium text-red-600 dark:text-red-400">{error}</p>
+      )}
     </div>
   );
 }
@@ -38,6 +67,7 @@ export function Select({
   label,
   hint,
   error,
+  labelTrailing,
   id,
   className = '',
   children,
@@ -47,17 +77,31 @@ export function Select({
 
   return (
     <div className="space-y-1.5">
-      <label
-        htmlFor={fieldId}
-        className="block cursor-pointer text-sm font-medium text-zinc-700 dark:text-zinc-300"
+      <div className="flex items-center justify-between gap-2">
+        <label
+          htmlFor={fieldId}
+          className="block cursor-pointer text-xs font-medium text-[var(--ink-secondary)]"
+        >
+          {label}
+        </label>
+        {labelTrailing}
+      </div>
+      <select
+        id={fieldId}
+        aria-invalid={Boolean(error)}
+        className={`${baseFieldClass} ${
+          error ? errorBorderClass : normalBorderClass
+        } cursor-pointer ${className}`}
+        {...props}
       >
-        {label}
-      </label>
-      <select id={fieldId} className={`${fieldClass} cursor-pointer ${className}`} {...props}>
         {children}
       </select>
-      {hint && !error && <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{hint}</p>}
-      {error && <p className="text-xs text-red-700 dark:text-red-300">{error}</p>}
+      {hint && !error && (
+        <p className="text-xs leading-relaxed text-[var(--ink-muted)]">{hint}</p>
+      )}
+      {error && (
+        <p className="text-xs font-medium text-red-600 dark:text-red-400">{error}</p>
+      )}
     </div>
   );
 }
@@ -66,6 +110,8 @@ export function Textarea({
   label,
   hint,
   error,
+  labelTrailing,
+  mono = true,
   id,
   className = '',
   ...props
@@ -74,19 +120,29 @@ export function Textarea({
 
   return (
     <div className="space-y-1.5">
-      <label
-        htmlFor={fieldId}
-        className="block cursor-pointer text-sm font-medium text-zinc-700 dark:text-zinc-300"
-      >
-        {label}
-      </label>
+      <div className="flex items-center justify-between gap-2">
+        <label
+          htmlFor={fieldId}
+          className="block cursor-pointer text-xs font-medium text-[var(--ink-secondary)]"
+        >
+          {label}
+        </label>
+        {labelTrailing}
+      </div>
       <textarea
         id={fieldId}
-        className={`min-h-32 w-full resize-y font-mono leading-relaxed placeholder:text-zinc-400 placeholder:opacity-45 sm:min-h-28 dark:placeholder:text-zinc-500 dark:placeholder:opacity-50 ${fieldClass} ${className}`}
+        aria-invalid={Boolean(error)}
+        className={`min-h-32 resize-y leading-relaxed sm:min-h-28 ${baseFieldClass} ${
+          error ? errorBorderClass : normalBorderClass
+        } ${mono ? 'font-mono text-xs sm:text-[13px]' : ''} ${className}`}
         {...props}
       />
-      {hint && !error && <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{hint}</p>}
-      {error && <p className="text-xs text-red-700 dark:text-red-300">{error}</p>}
+      {hint && !error && (
+        <p className="text-xs leading-relaxed text-[var(--ink-muted)]">{hint}</p>
+      )}
+      {error && (
+        <p className="text-xs font-medium text-red-600 dark:text-red-400">{error}</p>
+      )}
     </div>
   );
 }

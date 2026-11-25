@@ -1,18 +1,26 @@
-import { BracketsCurly, CheckCircle, DownloadSimple, File, Trash, WarningCircle } from '@phosphor-icons/react';
+import {
+  BracketsCurly,
+  DownloadSimple,
+  Eraser,
+  File,
+  Sparkle,
+  Trash,
+} from '@phosphor-icons/react';
 import { useRef, useState, type ChangeEvent } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { AnimatedSelect } from '../../../components/AnimatedSelect';
 import { Button } from '../../../components/Button';
 import { CopyField } from '../../../components/CopyField';
 import { Textarea } from '../../../components/Input';
+import { StudioAlert, StudioEmptyState, StudioPanel } from '../../../components/PageShell';
+import { TOOL_GRID_CLASS } from '../../../layout/content';
+import { formatFileSize } from '../../../lib/image-convert';
 import {
   DATA_FORMATS,
   FORMAT_MIME_TYPES,
   type DataFormat,
   type JsonFormatterAction,
 } from '../../../lib/json-formatter';
-import { formatFileSize } from '../../../lib/image-convert';
-import { TOOL_GRID_CLASS } from '../../../layout/content';
 import { useJsonFormatterMutation } from '../hooks/useJsonFormatterMutation';
 
 type InputFormat = DataFormat | 'auto';
@@ -22,6 +30,18 @@ type FormValues = {
   inputFormat: InputFormat;
   outputFormat: DataFormat;
 };
+
+const SAMPLE_JSON = JSON.stringify(
+  {
+    service: 'toolbox-api',
+    environment: 'production',
+    port: 3000,
+    features: ['db-verify', 'healthcheck'],
+    limits: { connectTimeoutMs: 5000, queryTimeoutMs: 8000 },
+  },
+  null,
+  2,
+);
 
 const INPUT_FORMAT_OPTIONS = [
   { value: 'auto', label: 'Detectar automaticamente' },
@@ -45,18 +65,6 @@ function downloadText(content: string, fileName: string, mimeType: string) {
   URL.revokeObjectURL(url);
 }
 
-function ResultsEmptyState() {
-  return (
-    <div className="flex min-h-[12rem] flex-col items-center justify-center rounded-md border border-dashed border-zinc-300 px-4 py-8 text-center sm:min-h-[16rem] dark:border-zinc-700">
-      <BracketsCurly size={32} aria-hidden="true" className="text-zinc-400 dark:text-zinc-500" />
-      <p className="mt-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">Nenhum resultado ainda</p>
-      <p className="mt-1 max-w-[34ch] text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-        Cole um JSON ou importe um arquivo e escolha uma ação para ver o resultado aqui.
-      </p>
-    </div>
-  );
-}
-
 export function JsonFormatterTool() {
   const formatterMutation = useJsonFormatterMutation();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -76,7 +84,13 @@ export function JsonFormatterTool() {
   const result = formatterMutation.data;
   const hasResults = Boolean(result);
 
-  async function runAction(action: JsonFormatterAction, values: FormValues, convertFormat?: DataFormat) {
+  const lineCount = text ? text.split(/\r\n|\r|\n/).length : 0;
+
+  async function runAction(
+    action: JsonFormatterAction,
+    values: FormValues,
+    convertFormat?: DataFormat,
+  ) {
     setActiveAction(action);
     formatterMutation.reset();
 
@@ -103,67 +117,92 @@ export function JsonFormatterTool() {
     reader.readAsText(file);
   }
 
-  function clearFile() {
+  function clearAll() {
     setFileName(null);
+    setValue('text', '');
+    formatterMutation.reset();
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   }
 
+  function loadSample() {
+    setFileName(null);
+    setValue('text', SAMPLE_JSON, { shouldDirty: true });
+    setValue('inputFormat', 'json');
+    formatterMutation.reset();
+  }
+
   return (
     <div className={TOOL_GRID_CLASS}>
-      <section className="space-y-6">
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500 sm:text-xs">
-          Entrada
-        </h2>
-
-        <form className="space-y-5 sm:space-y-6">
-          <div className="space-y-3">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Conteúdo</span>
-              <div className="flex flex-wrap items-center gap-2">
-                <label
-                  htmlFor="json-formatter-file-input"
-                  className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-                >
-                  <File size={14} aria-hidden="true" />
-                  Importar arquivo
-                </label>
-                {fileName && (
-                  <button
-                    type="button"
-                    onClick={clearFile}
-                    className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-                  >
-                    <Trash size={14} aria-hidden="true" />
-                    Remover
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {fileName && (
-              <p className="font-mono text-xs text-zinc-500 dark:text-zinc-400">{fileName}</p>
+      <StudioPanel
+        title="Entrada"
+        badge={
+          text ? (
+            <span className="rounded border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--ink-muted)]">
+              {lineCount} {lineCount === 1 ? 'linha' : 'linhas'}
+            </span>
+          ) : undefined
+        }
+        actions={
+          <>
+            <Button type="button" variant="ghost" size="sm" onClick={loadSample}>
+              <Sparkle size={13} aria-hidden="true" />
+              Exemplo
+            </Button>
+            <label
+              htmlFor="json-formatter-file-input"
+              className="focus-ring inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-panel)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] transition-colors hover:border-[var(--accent-border)] hover:bg-[var(--bg-subtle)]"
+            >
+              <File size={14} aria-hidden="true" />
+              Importar
+            </label>
+            {(text || fileName) && (
+              <Button type="button" variant="ghost" size="sm" onClick={clearAll}>
+                <Eraser size={13} aria-hidden="true" />
+                Limpar
+              </Button>
             )}
+          </>
+        }
+      >
+        <form className="space-y-5" onSubmit={(e) => e.preventDefault()}>
+          {fileName && (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-3 py-2 text-xs">
+              <span className="truncate font-mono text-[var(--ink-secondary)]">{fileName}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setFileName(null);
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
+                  }
+                }}
+                aria-label="Desvincular arquivo importado"
+                className="inline-flex cursor-pointer items-center gap-1 text-[var(--ink-muted)] hover:text-[var(--ink)]"
+              >
+                <Trash size={13} aria-hidden="true" />
+              </button>
+            </div>
+          )}
 
-            <Textarea
-              label="Texto ou JSON"
-              hint="JSON, YAML, XML ou CSV. Todo processamento é local."
-              placeholder={'{\n  "exemplo": true\n}'}
-              spellCheck={false}
-              className="min-h-56"
-              {...register('text')}
-            />
+          <Textarea
+            label="Dados estruturados"
+            hint="Aceita JSON, YAML, XML ou CSV com detecção automática de formato."
+            placeholder={'{\n  "chave": "valor"\n}'}
+            spellCheck={false}
+            className="min-h-60"
+            {...register('text')}
+          />
 
-            <input
-              id="json-formatter-file-input"
-              ref={fileInputRef}
-              type="file"
-              accept=".json,.yaml,.yml,.xml,.csv,application/json,text/yaml,application/xml,text/csv"
-              onChange={handleFileChange}
-              className="sr-only"
-            />
-          </div>
+          <input
+            id="json-formatter-file-input"
+            ref={fileInputRef}
+            type="file"
+            accept=".json,.yaml,.yml,.xml,.csv,application/json,text/yaml,application/xml,text/csv"
+            onChange={handleFileChange}
+            className="sr-only"
+          />
 
           <Controller
             name="inputFormat"
@@ -171,7 +210,6 @@ export function JsonFormatterTool() {
             render={({ field }) => (
               <AnimatedSelect
                 label="Formato de entrada"
-                hint="Use detecção automática ou escolha manualmente."
                 options={INPUT_FORMAT_OPTIONS}
                 value={field.value}
                 onChange={field.onChange}
@@ -181,7 +219,9 @@ export function JsonFormatterTool() {
           />
 
           <div className="space-y-2">
-            <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Ações</span>
+            <span className="block text-xs font-medium text-[var(--ink-secondary)]">
+              Operações rápidas
+            </span>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {ACTION_BUTTONS.map((item) => (
                 <Button
@@ -198,15 +238,14 @@ export function JsonFormatterTool() {
             </div>
           </div>
 
-          <div className="space-y-3 rounded-md border border-zinc-200 p-4 dark:border-zinc-800">
-            <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Converter para</span>
+          <div className="space-y-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3.5">
             <Controller
               name="outputFormat"
               control={control}
               render={({ field }) => (
                 <AnimatedSelect
-                  label="Formato de saída"
-                  hint="CSV exige objeto ou array de objetos tabulares."
+                  label="Converter para outro formato"
+                  hint="CSV requer objeto plano ou lista de objetos tabulares."
                   options={DATA_FORMATS.map((format) => ({
                     value: format.value,
                     label: format.label,
@@ -219,6 +258,7 @@ export function JsonFormatterTool() {
             />
             <Button
               type="button"
+              variant="secondary"
               fullWidth
               loading={formatterMutation.isPending && activeAction === 'convert'}
               disabled={!text.trim()}
@@ -228,73 +268,75 @@ export function JsonFormatterTool() {
             </Button>
           </div>
         </form>
-      </section>
+      </StudioPanel>
 
-      <section className="space-y-4 lg:sticky lg:top-[calc(var(--header-height-compact)+1.5rem)] lg:self-start">
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500 sm:text-xs">
-          Resultado
-        </h2>
+      <div className="lg:sticky lg:top-[calc(var(--topbar-height)+1.25rem)] lg:self-start">
+        <StudioPanel
+          title="Resultado"
+          badge={
+            result?.ok ? (
+              <span className="rounded border border-[var(--accent-border)] bg-[var(--accent-soft)] px-1.5 py-0.5 font-mono text-[10px] uppercase text-[var(--ink)]">
+                {result.outputFormat}
+              </span>
+            ) : undefined
+          }
+        >
+          <div className="space-y-4">
+            {!hasResults && (
+              <StudioEmptyState
+                icon={BracketsCurly}
+                title="Sem saída ainda"
+                description="Cole ou importe JSON, YAML, XML ou CSV e execute uma operação para inspecionar o resultado."
+              />
+            )}
 
-        {!hasResults && <ResultsEmptyState />}
-
-        {result && !result.ok && (
-          <div
-            role="alert"
-            className="space-y-2 rounded-md border border-zinc-400 bg-zinc-100 px-3 py-2.5 text-sm leading-relaxed text-zinc-800 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"
-          >
-            <div className="flex items-start gap-2">
-              <WarningCircle size={18} aria-hidden="true" className="mt-0.5 shrink-0" />
-              <div>
-                <p className="font-medium">Erro de sintaxe</p>
-                <p className="mt-1">{result.error}</p>
+            {result && !result.ok && (
+              <StudioAlert variant="error" title="Erro de sintaxe">
+                <p>{result.error}</p>
                 {result.line !== undefined && result.column !== undefined && (
-                  <p className="mt-2 font-mono text-xs text-zinc-600 dark:text-zinc-400">
+                  <p className="mt-2 inline-block rounded border border-red-500/30 bg-red-500/10 px-2 py-0.5 font-mono text-[11px]">
                     Linha {result.line}, coluna {result.column}
                   </p>
                 )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {result?.ok && (
-          <div className="space-y-4">
-            {result.message && (
-              <div className="flex items-start gap-2 rounded-md border border-zinc-200 px-3 py-2.5 text-sm text-zinc-800 dark:border-zinc-800 dark:text-zinc-200">
-                <CheckCircle size={18} aria-hidden="true" className="mt-0.5 shrink-0 text-zinc-700 dark:text-zinc-300" />
-                <p>{result.message}</p>
-              </div>
+              </StudioAlert>
             )}
 
-            {result.action !== 'validate' && (
-              <>
-                <CopyField
-                  label={`Saída (${result.outputFormat.toUpperCase()})`}
-                  value={result.output}
-                />
+            {result?.ok && (
+              <div className="space-y-4">
+                {result.message && <StudioAlert variant="success">{result.message}</StudioAlert>}
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    const extension =
-                      DATA_FORMATS.find((format) => format.value === result.outputFormat)?.extension ??
-                      result.outputFormat;
-                    downloadText(
-                      result.output,
-                      `formatado.${extension}`,
-                      FORMAT_MIME_TYPES[result.outputFormat],
-                    );
-                  }}
-                  className="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-zinc-950 bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white transition-transform duration-150 ease-out hover:bg-zinc-800 active:scale-[0.97] dark:border-zinc-50 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
-                >
-                  <DownloadSimple size={16} aria-hidden="true" />
-                  Baixar arquivo
-                </button>
-              </>
+                {result.action !== 'validate' && (
+                  <>
+                    <CopyField
+                      label={`Saída (${result.outputFormat.toUpperCase()})`}
+                      value={result.output}
+                    />
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      fullWidth
+                      onClick={() => {
+                        const extension =
+                          DATA_FORMATS.find((format) => format.value === result.outputFormat)
+                            ?.extension ?? result.outputFormat;
+                        downloadText(
+                          result.output,
+                          `formatado.${extension}`,
+                          FORMAT_MIME_TYPES[result.outputFormat],
+                        );
+                      }}
+                    >
+                      <DownloadSimple size={16} aria-hidden="true" />
+                      Baixar arquivo .{result.outputFormat}
+                    </Button>
+                  </>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </section>
+        </StudioPanel>
+      </div>
     </div>
   );
 }

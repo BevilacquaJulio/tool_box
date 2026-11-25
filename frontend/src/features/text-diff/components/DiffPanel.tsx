@@ -7,20 +7,20 @@ function escapePlainText(text: string): string {
 
 const ROW_STYLES: Record<DiffRow['type'], { left: string; right: string }> = {
   unchanged: {
-    left: 'bg-white dark:bg-zinc-950',
-    right: 'bg-white dark:bg-zinc-950',
+    left: 'bg-[var(--bg-panel)]',
+    right: 'bg-[var(--bg-panel)]',
   },
   removed: {
-    left: 'bg-red-50/50 dark:bg-red-950/15',
-    right: 'bg-zinc-50 dark:bg-zinc-900/40',
+    left: 'bg-red-500/8 dark:bg-red-950/30',
+    right: 'bg-[var(--bg-subtle)]/70',
   },
   added: {
-    left: 'bg-zinc-50 dark:bg-zinc-900/40',
-    right: 'bg-emerald-50/50 dark:bg-emerald-950/15',
+    left: 'bg-[var(--bg-subtle)]/70',
+    right: 'bg-emerald-500/8 dark:bg-emerald-950/30',
   },
   modified: {
-    left: 'bg-white dark:bg-zinc-950',
-    right: 'bg-white dark:bg-zinc-950',
+    left: 'bg-amber-500/6 dark:bg-amber-950/20',
+    right: 'bg-amber-500/6 dark:bg-amber-950/20',
   },
 };
 
@@ -38,14 +38,14 @@ function LineContent({
   className: string;
 }) {
   if (text === null && !html) {
-    return <td className={`${className} text-zinc-300 dark:text-zinc-700`}>&nbsp;</td>;
+    return <td className={`${className} text-[var(--ink-muted)]/40`}>&nbsp;</td>;
   }
 
   const contentHtml = html ?? escapePlainText(text ?? '');
 
   return (
     <td className={className}>
-      <pre className="overflow-x-auto px-3 py-1 font-mono text-[11px] leading-relaxed text-zinc-950 sm:text-xs dark:text-zinc-50">
+      <pre className="overflow-x-auto px-3 py-1 font-mono text-[11px] leading-relaxed text-[var(--ink)] sm:text-xs">
         <code dangerouslySetInnerHTML={{ __html: contentHtml }} />
       </pre>
     </td>
@@ -54,15 +54,17 @@ function LineContent({
 
 export function DiffPanel({ rows }: DiffPanelProps) {
   return (
-    <div className="overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-800">
+    <div className="overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)]">
       <div className="overflow-x-auto">
         <table className="min-w-full border-collapse">
           <thead>
-            <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-              <th className="w-12 px-2 py-2">#</th>
-              <th className="min-w-[16rem] px-2 py-2 sm:min-w-[24rem]">Original</th>
-              <th className="w-12 px-2 py-2">#</th>
-              <th className="min-w-[16rem] px-2 py-2 sm:min-w-[24rem]">Comparação</th>
+            <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-subtle)] text-left font-mono text-[11px] font-medium uppercase tracking-wider text-[var(--ink-muted)]">
+              <th className="w-12 border-r border-[var(--border-subtle)] px-2.5 py-2 text-right">#</th>
+              <th className="min-w-[16rem] border-r border-[var(--border-subtle)] px-3 py-2 sm:min-w-[24rem]">
+                Original (A)
+              </th>
+              <th className="w-12 border-r border-[var(--border-subtle)] px-2.5 py-2 text-right">#</th>
+              <th className="min-w-[16rem] px-3 py-2 sm:min-w-[24rem]">Comparação (B)</th>
             </tr>
           </thead>
           <tbody>
@@ -70,12 +72,19 @@ export function DiffPanel({ rows }: DiffPanelProps) {
               const styles = ROW_STYLES[row.type];
 
               return (
-                <tr key={`${row.type}-${index}`} className="border-b border-zinc-100 dark:border-zinc-900">
-                  <td className="select-none px-2 py-1 text-right font-mono text-[10px] text-zinc-400 sm:text-[11px]">
+                <tr
+                  key={`${row.type}-${index}`}
+                  className="border-b border-[var(--border-subtle)] last:border-b-0"
+                >
+                  <td className="select-none border-r border-[var(--border-subtle)] bg-[var(--bg-subtle)]/50 px-2.5 py-1 text-right font-mono text-[10px] tabular-nums text-[var(--ink-muted)] sm:text-[11px]">
                     {row.leftLineNumber ?? ''}
                   </td>
-                  <LineContent text={row.leftText} html={row.leftHtml} className={styles.left} />
-                  <td className="select-none px-2 py-1 text-right font-mono text-[10px] text-zinc-400 sm:text-[11px]">
+                  <LineContent
+                    text={row.leftText}
+                    html={row.leftHtml}
+                    className={`${styles.left} border-r border-[var(--border-subtle)]`}
+                  />
+                  <td className="select-none border-r border-[var(--border-subtle)] bg-[var(--bg-subtle)]/50 px-2.5 py-1 text-right font-mono text-[10px] tabular-nums text-[var(--ink-muted)] sm:text-[11px]">
                     {row.rightLineNumber ?? ''}
                   </td>
                   <LineContent text={row.rightText} html={row.rightHtml} className={styles.right} />

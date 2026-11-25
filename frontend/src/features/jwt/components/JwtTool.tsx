@@ -1,10 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Shuffle } from '@phosphor-icons/react';
+import { Key, Shuffle } from '@phosphor-icons/react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Button } from '../../../components/Button';
 import { CopyField } from '../../../components/CopyField';
-import { Input, Select } from '../../../components/Input';
+import { Input } from '../../../components/Input';
+import { StudioAlert, StudioEmptyState, StudioPanel } from '../../../components/PageShell';
+import { TOOL_GRID_CLASS } from '../../../layout/content';
 import { getErrorMessage } from '../../../lib/errors';
 import {
   DEFAULT_SECRET_LENGTH,
@@ -13,7 +15,6 @@ import {
   MAX_SECRET_LENGTH,
   MIN_SECRET_LENGTH,
 } from '../../../lib/jwt';
-import { TOOL_GRID_CLASS } from '../../../layout/content';
 import { useGenerateRandomJwtMutation } from '../hooks/useJwtMutations';
 
 const formSchema = z
@@ -37,16 +38,7 @@ const formSchema = z
 
 type FormValues = z.infer<typeof formSchema>;
 
-function ResultsEmptyState() {
-  return (
-    <div className="flex min-h-[12rem] flex-col items-center justify-center rounded-md border border-dashed border-zinc-300 px-4 py-8 text-center sm:min-h-[16rem] dark:border-zinc-700">
-      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Nenhum token ainda</p>
-      <p className="mt-1 max-w-[32ch] text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-        Escolha o peso e clique em gerar para criar um JWT aleatório compacto.
-      </p>
-    </div>
-  );
-}
+const PRESET_LENGTHS = [32, 64, 128, 256, 512] as const;
 
 export function JwtTool() {
   const generateMutation = useGenerateRandomJwtMutation();
@@ -64,10 +56,18 @@ export function JwtTool() {
       secretLength: DEFAULT_SECRET_LENGTH.HS256,
     },
   });
+
   const algorithm = watch('algorithm');
+  const secretLength = watch('secretLength');
+  const minSecret = MIN_SECRET_LENGTH[algorithm];
 
   const result = generateMutation.data;
   const activeError = generateMutation.error ? getErrorMessage(generateMutation.error) : null;
+
+  function selectAlgorithm(nextAlg: FormValues['algorithm']) {
+    setValue('algorithm', nextAlg, { shouldValidate: true });
+    setValue('secretLength', DEFAULT_SECRET_LENGTH[nextAlg], { shouldValidate: true });
+  }
 
   async function onGenerate(values: FormValues) {
     await generateMutation.mutateAsync({
@@ -76,89 +76,142 @@ export function JwtTool() {
     });
   }
 
+  const availablePresets = Array.from(
+    new Set([minSecret, ...PRESET_LENGTHS.filter((len) => len >= minSecret)]),
+  );
+
   return (
     <div className={TOOL_GRID_CLASS}>
-      <section className="space-y-6">
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500 sm:text-xs">
-          Entrada
-        </h2>
+      <StudioPanel title="Parâmetros de assinatura">
+        <form className="space-y-5" onSubmit={handleSubmit(onGenerate)}>
+          <div className="space-y-2">
+            <span className="block text-xs font-medium text-[var(--ink-secondary)]">
+              Algoritmo HMAC
+            </span>
 
-        <form className="space-y-5 sm:space-y-6" onSubmit={handleSubmit(onGenerate)}>
-          <Select
-            label="Peso do token"
-            hint="Define a força do HMAC usado na assinatura."
-            error={errors.algorithm?.message}
-            {...register('algorithm', {
-              // Troca o tamanho para o padrão do novo algoritmo, evitando ficar abaixo do mínimo dele.
-              onChange: (event) =>
-                setValue(
-                  'secretLength',
-                  DEFAULT_SECRET_LENGTH[event.target.value as FormValues['algorithm']],
-                  { shouldValidate: true },
-                ),
-            })}
-          >
-            {JWT_WEIGHTS.map((weight) => (
-              <option key={weight.algorithm} value={weight.algorithm}>
-                {weight.label}: {weight.description}
-              </option>
-            ))}
-          </Select>
+            <div
+              role="radiogroup"
+              aria-label="Algoritmo HMAC"
+              className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+            >
+              {JWT_WEIGHTS.map((weight) => {
+                const active = algorithm === weight.algorithm;
+                return (
+                  <button
+                    key={weight.algorithm}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => selectAlgorithm(weight.algorithm)}
+                    className={`focus-ring flex cursor-pointer flex-col rounded-xl border p-3 text-left transition-colors duration-150 ${
+                      active
+                        ? 'border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--ink)]'
+                        : 'border-[var(--border-subtle)] bg-[var(--bg-subtle)] text-[var(--ink-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--ink)]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs font-semibold text-[var(--accent)]">
+                        {weight.algorithm}
+                      </span>
+                      <span className="font-mono text-[10px] text-[var(--ink-muted)]">
+                        mín. {MIN_SECRET_LENGTH[weight.algorithm]}
+                      </span>
+                    </div>
+                    <span className="mt-1 text-xs font-semibold text-[var(--ink)]">
+                      {weight.label}
+                    </span>
+                    <span className="mt-0.5 text-[11px] leading-snug text-[var(--ink-muted)]">
+                      {weight.description}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-          <Input
-            label="Tamanho do segredo (caracteres)"
-            type="number"
-            inputMode="numeric"
-            min={MIN_SECRET_LENGTH[algorithm]}
-            max={MAX_SECRET_LENGTH}
-            step={1}
-            hint={`Entre ${MIN_SECRET_LENGTH[algorithm]} e ${MAX_SECRET_LENGTH}. Padrão: ${DEFAULT_SECRET_LENGTH[algorithm]}.`}
-            error={errors.secretLength?.message}
-            {...register('secretLength', { valueAsNumber: true })}
-          />
+          <div className="space-y-2.5">
+            <Input
+              label="Tamanho do segredo (caracteres)"
+              type="number"
+              inputMode="numeric"
+              min={minSecret}
+              max={MAX_SECRET_LENGTH}
+              step={1}
+              hint={`Intervalo aceito para ${algorithm}: ${minSecret} até ${MAX_SECRET_LENGTH} caracteres.`}
+              error={errors.secretLength?.message}
+              {...register('secretLength', { valueAsNumber: true })}
+            />
 
-          <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-            Gera um token JWT curto e aleatório, sem expiração.
-          </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 font-mono text-[10px] uppercase tracking-wider text-[var(--ink-muted)]">
+                Presets:
+              </span>
+              {availablePresets.map((preset) => {
+                const isSelected = secretLength === preset;
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setValue('secretLength', preset, { shouldValidate: true })}
+                    className={`focus-ring cursor-pointer rounded-md border px-2 py-1 font-mono text-[11px] transition-colors ${
+                      isSelected
+                        ? 'border-[var(--accent-border)] bg-[var(--accent-soft)] font-medium text-[var(--ink)]'
+                        : 'border-[var(--border-subtle)] bg-[var(--bg-subtle)] text-[var(--ink-muted)] hover:border-[var(--border-strong)] hover:text-[var(--ink)]'
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <Button type="submit" fullWidth loading={generateMutation.isPending}>
             <Shuffle size={16} aria-hidden="true" />
             Gerar JWT aleatório
           </Button>
         </form>
-      </section>
+      </StudioPanel>
 
-      <section className="space-y-4 lg:sticky lg:top-[calc(var(--header-height-compact)+1.5rem)] lg:self-start">
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500 sm:text-xs">
-          Resultado
-        </h2>
+      <div className="lg:sticky lg:top-[calc(var(--topbar-height)+1.25rem)] lg:self-start">
+        <StudioPanel
+          title="Token e segredo"
+          badge={
+            result ? (
+              <span className="rounded border border-[var(--accent-border)] bg-[var(--accent-soft)] px-1.5 py-0.5 font-mono text-[10px] font-medium text-[var(--ink)]">
+                {result.algorithm}
+              </span>
+            ) : undefined
+          }
+        >
+          <div className="space-y-4">
+            {!result && !activeError && (
+              <StudioEmptyState
+                icon={Key}
+                title="Nenhum JWT gerado"
+                description="Selecione o algoritmo HMAC e o comprimento do segredo para emitir um token compacto de teste."
+              />
+            )}
 
-        {!result && !activeError && <ResultsEmptyState />}
+            {activeError && <StudioAlert variant="error">{activeError}</StudioAlert>}
 
-        {activeError && (
-          <p
-            role="alert"
-            className="rounded-md border border-zinc-400 bg-zinc-100 px-3 py-2.5 text-sm leading-relaxed text-zinc-800 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"
-          >
-            {activeError}
-          </p>
-        )}
+            {result && (
+              <div className="space-y-4">
+                <StudioAlert variant="info" title={`Assinatura ${result.algorithm} emitida`}>
+                  Guarde o segredo junto com o token caso precise validar a assinatura no backend.
+                  Nada é persistido ao sair desta tela.
+                </StudioAlert>
 
-        {result && (
-          <div className="space-y-5">
-            <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm leading-relaxed text-blue-950 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-100">
-              <p className="font-medium">Assinatura {result.algorithm} pronta</p>
-              <p className="mt-1 text-xs text-blue-800 dark:text-blue-200">
-                Copie também o segredo. Ele é necessário para verificar a assinatura e não fica
-                armazenado após você sair desta página.
-              </p>
-            </div>
-
-            <CopyField label="Token JWT" value={result.token} />
-            <CopyField label={`Segredo de assinatura (${result.algorithm})`} value={result.secret} />
+                <CopyField label="Token JWT" value={result.token} />
+                <CopyField
+                  label={`Segredo HMAC (${result.algorithm})`}
+                  value={result.secret}
+                />
+              </div>
+            )}
           </div>
-        )}
-      </section>
+        </StudioPanel>
+      </div>
     </div>
   );
 }

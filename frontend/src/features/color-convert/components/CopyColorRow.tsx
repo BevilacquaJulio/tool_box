@@ -16,16 +16,22 @@ export function CopyColorRow({ label, value }: CopyColorRowProps) {
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800">
-      <span className="w-16 shrink-0 text-xs font-medium text-zinc-500 dark:text-zinc-400">{label}</span>
-      <code className="min-w-0 flex-1 truncate font-mono text-xs text-zinc-950 dark:text-zinc-50">{value}</code>
+    <div className="flex items-center gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-3 py-2">
+      <span className="w-16 shrink-0 font-mono text-[11px] font-medium uppercase text-[var(--ink-muted)]">
+        {label}
+      </span>
+      <code className="min-w-0 flex-1 truncate font-mono text-xs text-[var(--ink)]">{value}</code>
       <button
         type="button"
-        onClick={handleCopy}
+        onClick={() => void handleCopy()}
         aria-label={`Copiar ${label}`}
-        className="inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1 rounded-md border border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+        className={`focus-ring inline-flex min-h-7.5 shrink-0 cursor-pointer items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors active:scale-[0.98] ${
+          copied
+            ? 'border-emerald-500/40 bg-emerald-500/12 text-emerald-700 dark:text-emerald-300'
+            : 'border-[var(--border-strong)] bg-[var(--bg-panel)] text-[var(--ink-secondary)] hover:border-[var(--accent-border)] hover:text-[var(--ink)]'
+        }`}
       >
-        {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+        {copied ? <Check size={13} weight="bold" aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
         {copied ? 'Copiado' : 'Copiar'}
       </button>
     </div>
@@ -45,7 +51,7 @@ export function ColorSwatch({ label, hex, color, onSelect }: ColorSwatchProps) {
   async function handleCopy() {
     await navigator.clipboard.writeText(hex);
     setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
+    window.setTimeout(() => setCopied(false), 1400);
   }
 
   return (
@@ -55,16 +61,18 @@ export function ColorSwatch({ label, hex, color, onSelect }: ColorSwatchProps) {
         onSelect?.();
         void handleCopy();
       }}
-      className="group cursor-pointer space-y-2 text-left"
-      title={`Copiar ${hex}`}
+      className="focus-ring group cursor-pointer rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-2 text-left transition-colors hover:border-[var(--accent-border)]"
+      title={`Aplicar e copiar ${hex}`}
     >
       <span
-        className="block aspect-square w-full rounded-md border border-zinc-200 shadow-sm transition-transform group-hover:scale-[1.02] dark:border-zinc-700"
+        className="block h-12 w-full rounded-lg border border-black/10 shadow-2xs transition-transform duration-150 group-hover:scale-[1.02] dark:border-white/10"
         style={{ backgroundColor: color }}
         aria-hidden="true"
       />
-      <span className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">{label}</span>
-      <span className="block font-mono text-[10px] text-zinc-500 dark:text-zinc-400">
+      <span className="mt-2 block truncate text-[11px] font-medium text-[var(--ink-secondary)]">
+        {label}
+      </span>
+      <span className="block truncate font-mono text-[10px] text-[var(--ink-muted)]">
         {copied ? 'Copiado' : hex}
       </span>
     </button>

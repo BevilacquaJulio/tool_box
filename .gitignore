@@ -4,13 +4,16 @@
 # =============================================================================
 
 # --- Segredos ---------------------------------------------------------------
+# Ambas as linhas sao necessarias: `.env.*` nao casa com `.env`.
 .env
 .env.*
 !.env.example
 !.env.*.example
 
 # --- Documentacao operacional pessoal ---------------------------------------
+# Runbooks e anotacoes com dados reais de infraestrutura nao sao versionados.
 README-ignored.md
+MIGRACAO-DEPLOY.md
 
 # --- Dependencias -----------------------------------------------------------
 node_modules/
@@ -25,6 +28,8 @@ build/
 .vite/
 .cache/
 *.local
+__pycache__/
+*.py[cod]
 
 # --- Logs -------------------------------------------------------------------
 *.log
@@ -38,6 +43,7 @@ coverage/
 .vitest-cache/
 
 # --- Sistema operacional ----------------------------------------------------
+# Windows gera Desktop.ini automaticamente em pastas sincronizadas.
 Desktop.ini
 Thumbs.db
 ehthumbs.db
@@ -46,18 +52,23 @@ $RECYCLE.BIN/
 ._*
 *~
 
-# --- Editores ---------------------------------------------------------------
+# --- Editores e sessao local ------------------------------------------------
 .idea/
 *.iml
 .vscode/*
 !.vscode/extensions.json
+# Configuracao local de preview/execucao (.claude/launch.json); CLAUDE.md na raiz segue versionado.
+.claude/
 *.swp
 *.swo
 *.bak
 *.orig
 
 # --- Docker -----------------------------------------------------------------
+# Overrides locais de desenvolvimento; `deploy/compose.prod.yml` segue versionado.
 docker-compose.override.yml
 docker-compose.local.yml
+compose.override.yml
+compose.override.yaml
 secrets/
 *.pid

@@ -7,8 +7,8 @@ type PasswordInputProps = {
   error?: string;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>;
 
-const fieldClass =
-  'w-full rounded-xl border border-zinc-300 bg-white/82 px-3.5 py-3 pr-11 text-base text-zinc-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] outline-none transition-[border-color,box-shadow,background-color] duration-150 placeholder:text-zinc-400 focus:border-brand-500 focus:bg-white focus:ring-3 focus:ring-brand-500/12 sm:text-sm dark:border-zinc-700 dark:bg-zinc-900/72 dark:text-zinc-50 dark:shadow-none dark:focus:border-brand-400 dark:focus:bg-zinc-900 dark:focus:ring-brand-400/14';
+const baseFieldClass =
+  'w-full rounded-lg border bg-[var(--bg-subtle)] px-3.5 py-2.5 pr-11 font-mono text-base text-[var(--ink)] outline-none transition-[border-color,box-shadow,background-color] duration-150 placeholder:text-[var(--ink-muted)]/65 focus:bg-[var(--bg-panel)] sm:text-sm';
 
 export function PasswordInput({
   label,
@@ -25,7 +25,7 @@ export function PasswordInput({
     <div className="space-y-1.5">
       <label
         htmlFor={fieldId}
-        className="block cursor-pointer text-sm font-medium text-zinc-700 dark:text-zinc-300"
+        className="block cursor-pointer text-xs font-medium text-[var(--ink-secondary)]"
       >
         {label}
       </label>
@@ -34,21 +34,34 @@ export function PasswordInput({
           id={fieldId}
           type={visible ? 'text' : 'password'}
           autoComplete="off"
-          className={`${fieldClass} font-mono ${className}`}
+          aria-invalid={Boolean(error)}
+          className={`${baseFieldClass} ${
+            error
+              ? 'border-red-500/80 focus:border-red-500 focus:ring-3 focus:ring-red-500/15'
+              : 'border-[var(--border-strong)] focus:border-[var(--accent)] focus:ring-3 focus:ring-[var(--accent-soft)]'
+          } ${className}`}
           {...props}
         />
         <button
           type="button"
           onClick={() => setVisible((current) => !current)}
-          className="focus-ring absolute inset-y-0 right-0 inline-flex w-11 cursor-pointer items-center justify-center rounded-r-xl text-zinc-500 transition-colors hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+          className="focus-ring absolute inset-y-0 right-0 inline-flex w-10 cursor-pointer items-center justify-center rounded-r-lg text-[var(--ink-muted)] transition-colors hover:text-[var(--ink)]"
           aria-label={visible ? 'Ocultar senha' : 'Mostrar senha'}
           aria-pressed={visible}
         >
-          {visible ? <EyeSlash size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+          {visible ? (
+            <EyeSlash size={17} aria-hidden="true" />
+          ) : (
+            <Eye size={17} aria-hidden="true" />
+          )}
         </button>
       </div>
-      {hint && !error && <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{hint}</p>}
-      {error && <p className="text-xs text-red-700 dark:text-red-300">{error}</p>}
+      {hint && !error && (
+        <p className="text-xs leading-relaxed text-[var(--ink-muted)]">{hint}</p>
+      )}
+      {error && (
+        <p className="text-xs font-medium text-red-600 dark:text-red-400">{error}</p>
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import type { TextareaHTMLAttributes } from 'react';
 
 type DiffEditorPanelProps = {
   title: string;
+  badge?: string;
   fileName: string | null;
   onImport: () => void;
   onClear: () => void;
@@ -10,47 +11,70 @@ type DiffEditorPanelProps = {
 
 export function DiffEditorPanel({
   title,
+  badge,
   fileName,
   onImport,
   onClear,
+  value,
   className = '',
   ...props
 }: DiffEditorPanelProps) {
+  const stringVal = typeof value === 'string' ? value : '';
+  const lineCount = stringVal ? stringVal.split(/\r\n|\r|\n/).length : 0;
+  const hasContent = Boolean(stringVal || fileName);
+
   return (
-    <div className="overflow-hidden rounded-md border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="flex flex-col gap-2 border-b border-zinc-200 bg-zinc-50 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{title}</p>
-          {fileName && (
-            <p className="mt-0.5 truncate font-mono text-[11px] text-zinc-500 dark:text-zinc-400">{fileName}</p>
+    <div className="studio-panel overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border-subtle)] px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="font-mono text-xs font-medium uppercase tracking-wider text-[var(--ink-secondary)]">
+            {title}
+          </span>
+          {badge && (
+            <span className="rounded border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--ink-muted)]">
+              {badge}
+            </span>
+          )}
+          {lineCount > 0 && (
+            <span className="font-mono text-[10px] text-[var(--ink-muted)]">
+              {lineCount} {lineCount === 1 ? 'linha' : 'linhas'}
+            </span>
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={onImport}
-            className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            className="focus-ring inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-2.5 py-1 text-xs font-medium text-[var(--ink-secondary)] transition-colors hover:border-[var(--accent-border)] hover:text-[var(--ink)]"
           >
-            <File size={14} aria-hidden="true" />
-            Importar arquivo
+            <File size={13} aria-hidden="true" />
+            Importar
           </button>
-          {fileName && (
+          {hasContent && (
             <button
               type="button"
               onClick={onClear}
-              className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              aria-label={`Limpar ${title.toLowerCase()}`}
+              className="focus-ring inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-subtle)] px-2.5 py-1 text-xs font-medium text-[var(--ink-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--ink)]"
             >
-              <Trash size={14} aria-hidden="true" />
-              Remover
+              <Trash size={13} aria-hidden="true" />
+              Limpar
             </button>
           )}
         </div>
       </div>
 
+      {fileName && (
+        <div className="border-b border-[var(--border-subtle)] bg-[var(--bg-subtle)]/70 px-4 py-1.5 font-mono text-[11px] text-[var(--ink-muted)]">
+          {fileName}
+        </div>
+      )}
+
       <textarea
         spellCheck={false}
-        className={`min-h-64 w-full resize-y border-0 bg-zinc-50/80 px-4 py-3 font-mono text-[13px] leading-6 text-zinc-950 outline-none transition-colors placeholder:text-zinc-400 focus:bg-white dark:bg-zinc-900/60 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus:bg-zinc-950 ${className}`}
+        value={value}
+        className={`min-h-64 w-full resize-y border-0 bg-[var(--bg-subtle)]/55 px-4 py-3 font-mono text-xs leading-6 text-[var(--ink)] outline-none transition-colors placeholder:text-[var(--ink-muted)]/65 focus:bg-[var(--bg-panel)] sm:text-[13px] ${className}`}
         {...props}
       />
     </div>

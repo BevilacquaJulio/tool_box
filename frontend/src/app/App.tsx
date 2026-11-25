@@ -2,7 +2,6 @@ import { lazy, Suspense } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AppLayout } from '../components/AppLayout';
-import { BootLoader } from '../components/BootLoader';
 import { RouteLoadingFallback } from '../components/RouteLoadingFallback';
 import { ThemeProvider } from '../hooks/useTheme';
 import { HomePage } from '../pages/HomePage';
@@ -52,24 +51,77 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <BootLoader />
         <BrowserRouter>
-          <Suspense fallback={<RouteLoadingFallback />}>
-            <Routes>
-              <Route element={<AppLayout />}>
-                <Route index element={<HomePage />} />
-                <Route path="hash" element={<HashToolPage />} />
-                <Route path="jwt" element={<JwtToolPage />} />
-                <Route path="converter" element={<FileConvertToolPage />} />
-                <Route path="qrcode" element={<QrCodeToolPage />} />
-                <Route path="json" element={<JsonFormatterToolPage />} />
-                <Route path="diff" element={<TextDiffToolPage />} />
-                <Route path="colors" element={<ColorConvertToolPage />} />
-                <Route path="db-verify" element={<DbVerifyToolPage />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Route>
-            </Routes>
-          </Suspense>
+          <Routes>
+            <Route element={<AppLayout />}>
+              <Route index element={<HomePage />} />
+              <Route
+                path="hash"
+                element={
+                  <Suspense fallback={<RouteLoadingFallback />}>
+                    <HashToolPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="jwt"
+                element={
+                  <Suspense fallback={<RouteLoadingFallback />}>
+                    <JwtToolPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="converter"
+                element={
+                  <Suspense fallback={<RouteLoadingFallback />}>
+                    <FileConvertToolPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="qrcode"
+                element={
+                  <Suspense fallback={<RouteLoadingFallback />}>
+                    <QrCodeToolPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="json"
+                element={
+                  <Suspense fallback={<RouteLoadingFallback />}>
+                    <JsonFormatterToolPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="diff"
+                element={
+                  <Suspense fallback={<RouteLoadingFallback />}>
+                    <TextDiffToolPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="colors"
+                element={
+                  <Suspense fallback={<RouteLoadingFallback />}>
+                    <ColorConvertToolPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="db-verify"
+                element={
+                  <Suspense fallback={<RouteLoadingFallback />}>
+                    <DbVerifyToolPage />
+                  </Suspense>
+                }
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Routes>
         </BrowserRouter>
       </ThemeProvider>
     </QueryClientProvider>
