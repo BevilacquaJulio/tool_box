@@ -8,3 +8,6 @@ process.env.DB_VERIFY_QUERY_TIMEOUT_MS = '2000';
 process.env.THROTTLE_TTL_MS = '60000';
 process.env.THROTTLE_LIMIT = '100';
 process.env.JSON_BODY_LIMIT = '32kb';
+process.env.MEDIA_DOWNLOAD_SECRET = 'test-media-download-secret-32-chars';
+process.env.MEDIA_MAX_DOWNLOAD_BYTES = '52428800';
+process.env.MEDIA_DOWNLOAD_TOKEN_TTL_SECONDS = '900';

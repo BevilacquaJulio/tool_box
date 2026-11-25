@@ -16,6 +16,16 @@ const corsOriginSchema = z
     'CORS_ORIGIN must be a comma-separated list of absolute origins',
   );
 
+const optionalNonEmptyString = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+  z.string().trim().min(1).optional(),
+);
+
+const optionalSecretString = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+  z.string().trim().min(16).optional(),
+);
+
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   HOST: z.string().min(1).default('127.0.0.1'),
@@ -27,6 +37,12 @@ export const envSchema = z.object({
   THROTTLE_TTL_MS: z.coerce.number().int().positive().default(60_000),
   THROTTLE_LIMIT: z.coerce.number().int().positive().default(20),
   JSON_BODY_LIMIT: z.string().min(2).max(16).default('32kb'),
+  MEDIA_DOWNLOAD_SECRET: optionalSecretString,
+  MEDIA_MAX_DOWNLOAD_BYTES: z.coerce.number().int().positive().default(524_288_000),
+  MEDIA_DOWNLOAD_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().max(86_400).default(900),
+  YTDLP_BINARY_PATH: z.string().trim().min(1).default('yt-dlp'),
+  YOUTUBE_API_KEY: optionalNonEmptyString,
+  INSTAGRAM_ACCESS_TOKEN: optionalNonEmptyString,
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

@@ -109,6 +109,32 @@ describe('Security e2e', () => {
     await request(app.getHttpServer()).get('/api/docs').expect(200);
   });
 
+  it('blocks metadata and link-local destinations in media-extract (SSRF)', async () => {
+    const localhost = await request(app.getHttpServer())
+      .post('/api/media-extract/analyze')
+      .set('x-internal-api-key', TEST_API_KEY)
+      .send({ url: 'http://127.0.0.1:3000/api/health' })
+      .expect(400);
+
+    expect(localhost.body.error.code).toBe('VALIDATION_ERROR');
+
+    const metadata = await request(app.getHttpServer())
+      .post('/api/media-extract/analyze')
+      .set('x-internal-api-key', TEST_API_KEY)
+      .send({ url: 'http://169.254.169.254/latest/meta-data/' })
+      .expect(400);
+
+    expect(metadata.body.error.code).toBe('VALIDATION_ERROR');
+
+    const extraField = await request(app.getHttpServer())
+      .post('/api/media-extract/analyze')
+      .set('x-internal-api-key', TEST_API_KEY)
+      .send({ url: 'https://example.com/video.mp4', extra: true })
+      .expect(400);
+
+    expect(extraField.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
   it('returns 404 envelope for unknown routes', async () => {
     const response = await request(app.getHttpServer()).get('/api/does-not-exist').expect(404);
     expect(response.body.error).toMatchObject({

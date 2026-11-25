@@ -399,7 +399,9 @@ export function CommandPalette() {
             <ArrowElbowDownLeft size={13} aria-hidden="true" />
             Enter para abrir
           </span>
-          <span className="font-mono text-[10px]">Setas navegam · Alt+1..8 acesso direto</span>
+          <span className="font-mono text-[10px]">
+            Setas navegam · Alt+1..{tools.length} acesso direto
+          </span>
         </div>
       </div>
     </div>

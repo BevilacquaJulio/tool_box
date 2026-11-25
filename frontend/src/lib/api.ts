@@ -36,3 +36,7 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
 
   return (await response.json()) as T;
 }
+
+export function getMediaDownloadUrl(token: string): string {
+  return `${getApiBaseUrl()}/media-extract/download/${encodeURIComponent(token)}`;
+}

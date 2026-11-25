@@ -40,6 +40,11 @@ const DbVerifyToolPage = lazy(() =>
     default: module.DbVerifyToolPage,
   })),
 );
+const MediaExtractToolPage = lazy(() =>
+  import('../pages/MediaExtractToolPage').then((module) => ({
+    default: module.MediaExtractToolPage,
+  })),
+);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -119,6 +124,15 @@ export function App() {
                   </Suspense>
                 }
               />
+              <Route
+                path="media-extract"
+                element={
+                  <Suspense fallback={<RouteLoadingFallback />}>
+                    <MediaExtractToolPage />
+                  </Suspense>
+                }
+              />
+              <Route path="media" element={<Navigate to="/media-extract" replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

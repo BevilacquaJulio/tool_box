@@ -13,6 +13,8 @@ RUN npm run build
 FROM node:24-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+# yt-dlp nativo do Alpine para extração de mídia pública no módulo media-extract.
+RUN apk add --no-cache yt-dlp
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
