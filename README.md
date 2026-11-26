@@ -10,7 +10,7 @@ Console de ferramentas técnicas em `toolbox.bevilabs.com.br`. A maior parte dos
 - **Comparador de textos:** diff lado a lado com realce por caractere e exportação.
 - **Verificação de banco (MySQL/MariaDB):** diagnóstico via API interna de TCP, autenticação, TLS, ping, schema, privilégios e escrita temporária.
 - **Conversor de arquivos:** converte imagens (PNG, JPG, WebP, AVIF, BMP, GIF, SVG, HEIC/HEIF e RAW) e documentos/planilhas (PDF, DOCX, ODT, RTF, TXT, Markdown, HTML, XLSX/XLS/ODS, CSV/TSV, JSON e XML) localmente com detecção automática de formato e drag-and-drop.
-- **Extrator de mídia:** analisa links públicos de YouTube, Instagram, TikTok e arquivos diretos via API interna (`yt-dlp` + fallback oEmbed), exibindo metadados e liberando download por streaming com token assinado e proteção SSRF.
+- **Extrator de mídia:** analisa links públicos de YouTube, Instagram, TikTok e arquivos diretos via API interna (`yt-dlp` + `ffmpeg` opcional para MP3 e fallback oEmbed), permitindo baixar vídeo completo ou **somente áudio** (MP3/M4A) por streaming com token assinado e proteção SSRF.
 - **QR Code:** geração local em PNG ou SVG para URL, texto, Wi-Fi, Pix, vCard, e-mail e telefone.
 - **Laboratório de cores:** conversão entre HEX, RGB, HSL, HSV e CMYK, paletas, contraste WCAG e degradês CSS/Tailwind.
 
