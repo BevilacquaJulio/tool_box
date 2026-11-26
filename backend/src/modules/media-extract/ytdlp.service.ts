@@ -1,6 +1,9 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { execFile, spawn } from 'node:child_process';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import { promisify } from 'node:util';
 import type { EnvConfig } from '../../config/env.validation';
@@ -10,7 +13,20 @@ import { isValidFormatId, sanitizeFilename } from './media-extract.utils';
 const execFileAsync = promisify(execFile);
 const YTDLP_INFO_TIMEOUT_MS = 30_000;
 const YTDLP_INFO_MAX_BUFFER = 10 * 1024 * 1024;
+const YTDLP_HELP_TIMEOUT_MS = 5_000;
+const YTDLP_HELP_MAX_BUFFER = 2 * 1024 * 1024;
+const YTDLP_COOKIES_MAX_BYTES = 2 * 1024 * 1024;
 const FFMPEG_CHECK_TIMEOUT_MS = 5_000;
+
+interface CookiesSession {
+  args: string[];
+  cleanup: () => Promise<void>;
+}
+
+const NOOP_COOKIES_SESSION: CookiesSession = {
+  args: [],
+  cleanup: async () => undefined,
+};
 
 const AUDIO_EXTENSION_PRIORITY: Record<string, number> = {
   m4a: 3,
@@ -101,11 +117,16 @@ export function buildYtdlpFilename(title: string, ext: string): string {
 export class YtdlpService {
   private readonly logger = new Logger(YtdlpService.name);
   private ffmpegAvailabilityPromise: Promise<boolean> | null = null;
+  private jsRuntimeSupportPromise: Promise<boolean> | null = null;
 
   constructor(private readonly configService: ConfigService<EnvConfig, true>) {}
 
   private get binaryPath(): string {
     return this.configService.get('YTDLP_BINARY_PATH', { infer: true });
+  }
+
+  private get cookiesPath(): string | undefined {
+    return this.configService.get('YTDLP_COOKIES_PATH', { infer: true });
   }
 
   private get ffmpegBinaryPath(): string {
@@ -125,28 +146,143 @@ export class YtdlpService {
     return this.ffmpegAvailabilityPromise;
   }
 
-  async getInfo(url: string): Promise<YtdlpInfo> {
-    const args = ['--dump-single-json', '--no-playlist', '--no-warnings', '--skip-download', '--', url];
+  private async supportsJsRuntimes(): Promise<boolean> {
+    if (!this.jsRuntimeSupportPromise) {
+      this.jsRuntimeSupportPromise = execFileAsync(this.binaryPath, ['--help'], {
+        timeout: YTDLP_HELP_TIMEOUT_MS,
+        maxBuffer: YTDLP_HELP_MAX_BUFFER,
+        windowsHide: true,
+      })
+        .then(({ stdout }) => stdout.includes('--js-runtimes'))
+        .catch(() => false);
+    }
 
-    const { stdout } = await execFileAsync(this.binaryPath, args, {
-      timeout: YTDLP_INFO_TIMEOUT_MS,
-      maxBuffer: YTDLP_INFO_MAX_BUFFER,
-      windowsHide: true,
-    });
-
-    return JSON.parse(stdout) as YtdlpInfo;
+    return this.jsRuntimeSupportPromise;
   }
 
-  createDownloadStream(
+  private async buildJsRuntimeArgs(): Promise<string[]> {
+    // yt-dlp 2025.11+ desabilita Node por padrão; usa o binário Node já presente no runtime.
+    if (await this.supportsJsRuntimes()) {
+      return ['--js-runtimes', `node:${process.execPath}`];
+    }
+    return [];
+  }
+
+  private async prepareCookiesSession(): Promise<CookiesSession> {
+    const sourcePath = this.cookiesPath;
+    if (!sourcePath) {
+      return NOOP_COOKIES_SESSION;
+    }
+
+    let rawContent: Buffer;
+    try {
+      const fileStats = await stat(sourcePath);
+      if (!fileStats.isFile()) {
+        this.logger.warn(
+          'YTDLP_COOKIES_PATH não aponta para um arquivo regular; executando yt-dlp sem cookies.',
+        );
+        return NOOP_COOKIES_SESSION;
+      }
+      if (fileStats.size > YTDLP_COOKIES_MAX_BYTES) {
+        this.logger.warn(
+          'Arquivo configurado em YTDLP_COOKIES_PATH excede o limite de 2 MB; executando yt-dlp sem cookies.',
+        );
+        return NOOP_COOKIES_SESSION;
+      }
+
+      rawContent = await readFile(sourcePath);
+      if (rawContent.toString('utf8').trim().length === 0) {
+        this.logger.warn(
+          'Arquivo configurado em YTDLP_COOKIES_PATH está vazio; executando yt-dlp sem cookies.',
+        );
+        return NOOP_COOKIES_SESSION;
+      }
+    } catch (error) {
+      const code =
+        error && typeof error === 'object' && 'code' in error ? String(error.code) : 'ERR';
+      this.logger.warn(
+        `Não foi possível ler YTDLP_COOKIES_PATH (${code}); executando yt-dlp sem cookies.`,
+      );
+      return NOOP_COOKIES_SESSION;
+    }
+
+    // Copia para diretório temporário isolado (0600): evita erro em volume :ro e corrida entre requisições simultâneas.
+    let tempDir: string | undefined;
+    try {
+      tempDir = await mkdtemp(join(tmpdir(), 'toolbox-ytdlp-'));
+      const tempCookiesFile = join(tempDir, 'cookies.txt');
+      await writeFile(tempCookiesFile, rawContent, { mode: 0o600 });
+
+      let cleaned = false;
+      const dirToRemove = tempDir;
+      return {
+        args: ['--cookies', tempCookiesFile],
+        cleanup: async () => {
+          if (cleaned) {
+            return;
+          }
+          cleaned = true;
+          await rm(dirToRemove, { recursive: true, force: true }).catch(() => undefined);
+        },
+      };
+    } catch {
+      if (tempDir) {
+        await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+      }
+      this.logger.warn(
+        'Não foi possível preparar cópia temporária de cookies; executando yt-dlp sem cookies.',
+      );
+      return NOOP_COOKIES_SESSION;
+    }
+  }
+
+  async getInfo(url: string): Promise<YtdlpInfo> {
+    const [jsRuntimeArgs, cookies] = await Promise.all([
+      this.buildJsRuntimeArgs(),
+      this.prepareCookiesSession(),
+    ]);
+
+    const args = [
+      ...jsRuntimeArgs,
+      ...cookies.args,
+      '--dump-single-json',
+      '--no-playlist',
+      '--no-warnings',
+      '--skip-download',
+      '--',
+      url,
+    ];
+
+    try {
+      const { stdout } = await execFileAsync(this.binaryPath, args, {
+        timeout: YTDLP_INFO_TIMEOUT_MS,
+        maxBuffer: YTDLP_INFO_MAX_BUFFER,
+        windowsHide: true,
+      });
+
+      return JSON.parse(stdout) as YtdlpInfo;
+    } finally {
+      await cookies.cleanup();
+    }
+  }
+
+  async createDownloadStream(
     url: string,
     formatId?: string,
-  ): { stream: Readable; abort: () => void } {
+  ): Promise<{ stream: Readable; abort: () => void }> {
     const resolvedFormat = formatId && formatId.trim().length > 0 ? formatId.trim() : 'best';
     if (!isValidFormatId(resolvedFormat)) {
       throw new BadRequestException('Formato de mídia inválido.');
     }
 
+    const [jsRuntimeArgs, cookies] = await Promise.all([
+      this.buildJsRuntimeArgs(),
+      this.prepareCookiesSession(),
+    ]);
+
     const args = [
+      ...jsRuntimeArgs,
+      ...cookies.args,
       '--output',
       '-',
       '--quiet',
@@ -159,16 +295,29 @@ export class YtdlpService {
       url,
     ];
 
-    const subprocess = spawn(this.binaryPath, args, {
-      shell: false,
-      windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    let subprocess: ReturnType<typeof spawn>;
+    try {
+      subprocess = spawn(this.binaryPath, args, {
+        shell: false,
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (error) {
+      await cookies.cleanup();
+      throw error;
+    }
 
     if (!subprocess.stdout) {
       subprocess.kill('SIGTERM');
+      await cookies.cleanup();
       throw new Error('yt-dlp não retornou stream de saída.');
     }
+
+    const cleanupCookies = () => {
+      void cookies.cleanup();
+    };
+
+    subprocess.once('close', cleanupCookies);
 
     subprocess.stderr?.on('data', (chunk: Buffer) => {
       const text = chunk.toString('utf8').trim();
@@ -178,9 +327,10 @@ export class YtdlpService {
     });
 
     subprocess.on('error', (error) => {
+      cleanupCookies();
       this.logger.warn(`Erro no processo yt-dlp: ${error.message}`);
-      if (!subprocess.stdout.destroyed) {
-        subprocess.stdout.destroy(error);
+      if (!subprocess.stdout?.destroyed) {
+        subprocess.stdout?.destroy(error);
       }
     });
 
@@ -189,6 +339,8 @@ export class YtdlpService {
       abort: () => {
         if (!subprocess.killed && subprocess.exitCode === null) {
           subprocess.kill('SIGTERM');
+        } else {
+          cleanupCookies();
         }
       },
     };
@@ -269,11 +421,11 @@ export class YtdlpService {
     };
   }
 
-  createAudioMp3Stream(
+  async createAudioMp3Stream(
     url: string,
     formatId?: string,
-  ): { stream: Readable; abort: () => void } {
-    const source = this.createDownloadStream(url, formatId ?? 'bestaudio/best');
+  ): Promise<{ stream: Readable; abort: () => void }> {
+    const source = await this.createDownloadStream(url, formatId ?? 'bestaudio/best');
     return this.transcodeStreamToMp3(source.stream, source.abort);
   }
 }

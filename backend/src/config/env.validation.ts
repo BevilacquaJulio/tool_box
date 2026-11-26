@@ -41,6 +41,7 @@ export const envSchema = z.object({
   MEDIA_MAX_DOWNLOAD_BYTES: z.coerce.number().int().positive().default(524_288_000),
   MEDIA_DOWNLOAD_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().max(86_400).default(900),
   YTDLP_BINARY_PATH: z.string().trim().min(1).default('yt-dlp'),
+  YTDLP_COOKIES_PATH: optionalNonEmptyString,
   FFMPEG_BINARY_PATH: z.string().trim().min(1).default('ffmpeg'),
   YOUTUBE_API_KEY: optionalNonEmptyString,
   INSTAGRAM_ACCESS_TOKEN: optionalNonEmptyString,

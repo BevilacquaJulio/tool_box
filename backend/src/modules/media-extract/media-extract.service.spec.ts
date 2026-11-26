@@ -83,7 +83,7 @@ describe('MediaExtractService', () => {
       contentType: 'audio/mp4',
       exp: Math.floor(Date.now() / 1000) + 300,
     });
-    ytdlpService.createDownloadStream.mockReturnValue({ stream: fakeStream, abort });
+    ytdlpService.createDownloadStream.mockResolvedValue({ stream: fakeStream, abort });
 
     const result = await service.downloadByToken('valid.token');
 
@@ -108,7 +108,7 @@ describe('MediaExtractService', () => {
       contentType: 'audio/mpeg',
       exp: Math.floor(Date.now() / 1000) + 300,
     });
-    ytdlpService.createAudioMp3Stream.mockReturnValue({ stream: fakeStream, abort });
+    ytdlpService.createAudioMp3Stream.mockResolvedValue({ stream: fakeStream, abort });
 
     const result = await service.downloadByToken('audio.token');
 
