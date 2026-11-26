@@ -16,6 +16,9 @@ services:
       NODE_ENV: production
       HOST: "0.0.0.0"
       CORS_ORIGIN: https://${DOMAIN:?DOMAIN não definida}
+    volumes:
+      # Pasta opcional para cookies.txt do yt-dlp fora do Git (copiado para tmp isolado a cada execução).
+      - ./secrets:/run/ytdlp:ro
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s

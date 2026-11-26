@@ -186,4 +186,94 @@ describe('PlatformExtractorsService — extração de áudio', () => {
     const tokenPayload = downloadTokenService.verify(result.items[0].downloadToken!);
     expect(tokenPayload.mode).toBe('direct-audio');
   });
+
+  describe('classificação de erros no fallback oEmbed', () => {
+    beforeEach(() => {
+      remoteFetchService.fetchJson.mockResolvedValue({
+        title: 'GTA 6 está morrendo... e rápido',
+        thumbnail_url: 'https://i.ytimg.com/vi/D2eJYyFcr_k/hqdefault.jpg',
+      });
+    });
+
+    it('informa bloqueio anti-bot do YouTube com orientação sobre YTDLP_COOKIES_PATH', async () => {
+      const botError = Object.assign(
+        new Error(
+          "Command failed: yt-dlp --dump-single-json -- https://www.youtube.com/watch?v=D2eJYyFcr_k\nERROR: [youtube] D2eJYyFcr_k: Sign in to confirm you're not a bot. Use --cookies for the authentication.",
+        ),
+        { code: 1 },
+      );
+      ytdlpService.getInfo.mockRejectedValue(botError);
+
+      const result = await service.extract(
+        'https://www.youtube.com/watch?v=D2eJYyFcr_k',
+        'youtube',
+        'audio',
+      );
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].downloadable).toBe(false);
+      expect(result.items[0].restrictionReason).toMatch(/anti-bot|autenticação/i);
+      expect(result.items[0].restrictionReason).toMatch(/YTDLP_COOKIES_PATH/);
+      expect(result.items[0].restrictionReason).not.toMatch(/Configure o yt-dlp no servidor/i);
+      expect(result.items[0].restrictionReason).not.toMatch(/Command failed|--dump-single-json/);
+    });
+
+    it('mantém aviso de instalação do yt-dlp apenas quando o binário não existe (ENOENT)', async () => {
+      const enoentError = Object.assign(new Error('spawn yt-dlp ENOENT'), { code: 'ENOENT' });
+      ytdlpService.getInfo.mockRejectedValue(enoentError);
+
+      const result = await service.extract(
+        'https://www.youtube.com/watch?v=D2eJYyFcr_k',
+        'youtube',
+        'audio',
+      );
+
+      expect(result.items[0].restrictionReason).toMatch(/Configure o yt-dlp no servidor/i);
+    });
+
+    it('identifica mídia privada ou indisponível publicamente', async () => {
+      ytdlpService.getInfo.mockRejectedValue(
+        new Error('ERROR: [youtube] abc123: Private video. Sign in if you have been granted access'),
+      );
+
+      const result = await service.extract(
+        'https://www.youtube.com/watch?v=abc123',
+        'youtube',
+        'all',
+      );
+
+      expect(result.items[0].restrictionReason).toMatch(/privada|indisponível/i);
+    });
+
+    it('identifica timeout na execução do yt-dlp', async () => {
+      const timeoutError = Object.assign(new Error('Command failed: timed out'), {
+        killed: true,
+        signal: 'SIGTERM',
+      });
+      ytdlpService.getInfo.mockRejectedValue(timeoutError);
+
+      const result = await service.extract(
+        'https://www.youtube.com/watch?v=abc123',
+        'youtube',
+        'audio',
+      );
+
+      expect(result.items[0].restrictionReason).toMatch(/tempo limite/i);
+    });
+
+    it('retorna mensagem genérica segura para falhas inesperadas sem vazar detalhes internos', async () => {
+      ytdlpService.getInfo.mockRejectedValue(
+        new Error('Command failed: /usr/bin/yt-dlp --cookies /tmp/secret.txt unexpected crash'),
+      );
+
+      const result = await service.extract(
+        'https://www.youtube.com/watch?v=abc123',
+        'youtube',
+        'audio',
+      );
+
+      expect(result.items[0].restrictionReason).not.toMatch(/Configure o yt-dlp no servidor/i);
+      expect(result.items[0].restrictionReason).not.toMatch(/\/tmp\/secret\.txt|\/usr\/bin/);
+    });
+  });
 });

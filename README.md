@@ -42,7 +42,7 @@ npm --prefix frontend ci
 npm run dev                 # API (:3000) + Web (:5173); ou dev:api / dev:web separados
 ```
 
-No Windows, `iniciar-dev.bat` faz o mesmo com duplo clique. Antes, crie `backend/.env` e `frontend/.env` a partir dos `.env.example` de cada pasta (`INTERNAL_API_KEY` igual nos dois, mínimo 32 caracteres). Para habilitar downloads de YouTube/Instagram/TikTok localmente, mantenha `yt-dlp` disponível no `PATH` (ou configure `YTDLP_BINARY_PATH` no `backend/.env`).
+No Windows, `iniciar-dev.bat` faz o mesmo com duplo clique. Antes, crie `backend/.env` e `frontend/.env` a partir dos `.env.example` de cada pasta (`INTERNAL_API_KEY` igual nos dois, mínimo 32 caracteres). Para habilitar downloads de YouTube/Instagram/TikTok localmente, mantenha `yt-dlp` disponível no `PATH` (ou configure `YTDLP_BINARY_PATH` no `backend/.env`); em servidores onde o YouTube exigir verificação anti-bot, configure `YTDLP_COOKIES_PATH` apontando para um arquivo `cookies.txt` em formato Netscape fora do Git.
 
 ## Testes e build
 

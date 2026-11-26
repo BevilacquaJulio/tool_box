@@ -28,7 +28,7 @@ export class MediaExtractService {
     await assertPublicHost(validatedUrl);
 
     if (payload.mode === 'ytdlp') {
-      const { stream, abort } = this.ytdlpService.createDownloadStream(
+      const { stream, abort } = await this.ytdlpService.createDownloadStream(
         validatedUrl.toString(),
         payload.formatId,
       );
@@ -41,7 +41,7 @@ export class MediaExtractService {
     }
 
     if (payload.mode === 'ytdlp-audio') {
-      const { stream, abort } = this.ytdlpService.createAudioMp3Stream(
+      const { stream, abort } = await this.ytdlpService.createAudioMp3Stream(
         validatedUrl.toString(),
         payload.formatId,
       );

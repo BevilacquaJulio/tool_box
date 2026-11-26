@@ -30,10 +30,65 @@ import {
   YtdlpService,
 } from './ytdlp.service';
 
-const YTDLP_FALLBACK_MESSAGE =
+const YTDLP_MISSING_MESSAGE =
   'Configure o yt-dlp no servidor para habilitar o download direto desta plataforma.';
+const YTDLP_YOUTUBE_BOT_MESSAGE =
+  'O YouTube exigiu autenticação/verificação anti-bot para o IP deste servidor. Configure YTDLP_COOKIES_PATH (ou atualize os cookies expirados) no servidor para habilitar o download direto.';
+const YTDLP_PLATFORM_AUTH_MESSAGE =
+  'Esta plataforma exigiu autenticação para o IP deste servidor. Conteúdos protegidos por sessão podem requerer cookies configurados em YTDLP_COOKIES_PATH no servidor.';
+const YTDLP_UNAVAILABLE_MESSAGE =
+  'Esta mídia está privada, restrita por região ou indisponível publicamente para download direto.';
+const YTDLP_TIMEOUT_MESSAGE =
+  'A análise desta mídia excedeu o tempo limite no servidor. Tente novamente em instantes.';
+const YTDLP_GENERIC_ERROR_MESSAGE =
+  'Não foi possível extrair os formatos diretos desta plataforma no momento. Tente novamente ou abra o link na origem.';
 const FFMPEG_AUDIO_FALLBACK_MESSAGE =
   'Esta mídia não expõe faixa de áudio separada. Instale o ffmpeg no servidor para extrair o áudio em MP3.';
+
+interface ExecErrorLike {
+  code?: string | number;
+  killed?: boolean;
+  signal?: string | null;
+  stderr?: string | Buffer;
+  message?: string;
+}
+
+export function classifyYtdlpError(error: unknown, platform: MediaPlatform): string {
+  const err = (error && typeof error === 'object' ? error : {}) as ExecErrorLike;
+  if (err.code === 'ENOENT') {
+    return YTDLP_MISSING_MESSAGE;
+  }
+
+  const stderrText =
+    typeof err.stderr === 'string'
+      ? err.stderr
+      : Buffer.isBuffer(err.stderr)
+        ? err.stderr.toString('utf8')
+        : '';
+  const combined = `${err.message ?? ''}\n${stderrText}`;
+
+  if (/sign in to confirm you['’]?re not a bot|use --cookies|cookies-from-browser/i.test(combined)) {
+    return platform === 'youtube' ? YTDLP_YOUTUBE_BOT_MESSAGE : YTDLP_PLATFORM_AUTH_MESSAGE;
+  }
+
+  if (
+    /private video|video unavailable|members-only|join this channel|not available in your country|account associated with this video has been terminated|this video has been removed|post is private/i.test(
+      combined,
+    )
+  ) {
+    return YTDLP_UNAVAILABLE_MESSAGE;
+  }
+
+  if (/confirm your age|sign in to confirm your age|login required|authentication required|sign in to view/i.test(combined)) {
+    return platform === 'youtube' ? YTDLP_YOUTUBE_BOT_MESSAGE : YTDLP_PLATFORM_AUTH_MESSAGE;
+  }
+
+  if (err.killed === true || err.code === 'ETIMEDOUT' || /timed out/i.test(combined)) {
+    return YTDLP_TIMEOUT_MESSAGE;
+  }
+
+  return YTDLP_GENERIC_ERROR_MESSAGE;
+}
 
 @Injectable()
 export class PlatformExtractorsService {
@@ -86,19 +141,19 @@ export class PlatformExtractorsService {
     oEmbedUrl: string,
     mode: MediaExtractMode,
   ): Promise<MediaExtractResult> {
-    const ytdlpResult = await this.tryAnalyzeWithYtdlp(sourceUrl, platform, mode);
-    if (ytdlpResult) {
-      return ytdlpResult;
+    const attempt = await this.tryAnalyzeWithYtdlp(sourceUrl, platform, mode);
+    if (attempt.ok) {
+      return attempt.result;
     }
 
-    return this.extractWithOEmbed(sourceUrl, platform, oEmbedUrl, mode);
+    return this.extractWithOEmbed(sourceUrl, platform, oEmbedUrl, mode, attempt.fallbackReason);
   }
 
   private async tryAnalyzeWithYtdlp(
     sourceUrl: string,
     platform: MediaPlatform,
     mode: MediaExtractMode,
-  ): Promise<MediaExtractResult | null> {
+  ): Promise<{ ok: true; result: MediaExtractResult } | { ok: false; fallbackReason: string }> {
     try {
       const info = await this.ytdlpService.getInfo(sourceUrl);
       const ffmpegAvailable = await this.ytdlpService.isFfmpegAvailable();
@@ -158,16 +213,22 @@ export class PlatformExtractorsService {
       }
 
       return {
-        sourceUrl,
-        platform,
-        mode,
-        pageTitle,
-        items,
+        ok: true,
+        result: {
+          sourceUrl,
+          platform,
+          mode,
+          pageTitle,
+          items,
+        },
       };
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'erro desconhecido';
       this.logger.warn(`yt-dlp falhou ao analisar plataforma ${platform}: ${reason}`);
-      return null;
+      return {
+        ok: false,
+        fallbackReason: classifyYtdlpError(error, platform),
+      };
     }
   }
 
@@ -292,6 +353,7 @@ export class PlatformExtractorsService {
     platform: MediaPlatform,
     oEmbedUrl: string,
     mode: MediaExtractMode,
+    restrictionReason: string = YTDLP_MISSING_MESSAGE,
   ): Promise<MediaExtractResult> {
     let oEmbed: OEmbedResponse | null = null;
 
@@ -310,7 +372,7 @@ export class PlatformExtractorsService {
         mediaType: mode === 'audio' ? 'audio' : 'video',
         extension: mode === 'audio' ? 'mp3' : 'mp4',
         downloadable: false,
-        restrictionReason: YTDLP_FALLBACK_MESSAGE,
+        restrictionReason,
         originalUrl: sourceUrl,
         openUrl: sourceUrl,
       },
