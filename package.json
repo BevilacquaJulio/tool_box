@@ -4,7 +4,16 @@
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "npm --prefix backend run dev",
-    "dev:web": "npm --prefix frontend run dev"
+    "dev:web": "npm --prefix frontend run dev",
+    "build": "npm run build:api && npm run build:web",
+    "build:api": "npm --prefix backend run build",
+    "build:web": "npm --prefix frontend run build",
+    "test": "npm run test:api && npm run test:web",
+    "test:api": "npm --prefix backend test",
+    "test:api:e2e": "npm --prefix backend run test:e2e",
+    "test:web": "npm --prefix frontend test",
+    "ci:api": "npm --prefix backend run ci",
+    "ci:web": "npm --prefix frontend test && npm --prefix frontend run build"
   },
   "devDependencies": {
     "concurrently": "^9.2.5"

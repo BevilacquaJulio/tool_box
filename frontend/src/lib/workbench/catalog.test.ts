@@ -15,11 +15,14 @@ describe('workbench catalog helpers', () => {
   it('encontra ferramentas por nome sem acento e por tags técnicas', () => {
     const dbTool = tools.find((tool) => tool.id === 'db-verify')!;
     const qrTool = tools.find((tool) => tool.id === 'qrcode')!;
+    const mediaTool = tools.find((tool) => tool.id === 'media-extract')!;
 
     expect(matchesToolQuery(dbTool, 'verificacao')).toBe(true);
     expect(matchesToolQuery(dbTool, 'mariadb')).toBe(true);
     expect(matchesToolQuery(qrTool, 'PIX')).toBe(true);
     expect(matchesToolQuery(qrTool, 'argon2')).toBe(false);
+    expect(matchesToolQuery(mediaTool, 'youtube')).toBe(true);
+    expect(matchesToolQuery(mediaTool, 'extrator de midia')).toBe(true);
   });
 
   it('prioriza ferramentas fixadas no modo Todas sem busca ativa', () => {

@@ -8,6 +8,7 @@ import { InternalApiKeyGuard } from './common/guards/internal-api-key.guard';
 import { validateEnv, type EnvConfig } from './config/env.validation';
 import { DbVerifyModule } from './modules/db-verify/db-verify.module';
 import { HealthModule } from './modules/health/health.module';
+import { MediaExtractModule } from './modules/media-extract/media-extract.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { HealthModule } from './modules/health/health.module';
     }),
     HealthModule,
     DbVerifyModule,
+    MediaExtractModule,
   ],
   providers: [
     {

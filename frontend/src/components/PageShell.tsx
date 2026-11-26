@@ -180,7 +180,7 @@ export function ToolPageLayout({ title, description, children }: ToolPageLayoutP
             {isHybrid ? (
               <>
                 <PlugsConnected size={14} className="text-[var(--accent)]" aria-hidden="true" />
-                Teste via API interna
+                Via API interna
               </>
             ) : (
               <>

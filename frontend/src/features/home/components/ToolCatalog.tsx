@@ -77,7 +77,7 @@ export function ToolCatalog() {
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filtrar por nome, formato ou protocolo (bcrypt, pix, yaml, pdf, mysql...)"
+              placeholder="Filtrar por nome, formato ou protocolo (bcrypt, pix, yaml, pdf, youtube, mysql...)"
               className="w-full min-w-0 border-0 bg-transparent px-2.5 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--ink-muted)]"
             />
             {query && (

@@ -2,6 +2,7 @@ import {
   BracketsCurly,
   Database,
   Files,
+  FilmStrip,
   GitDiff,
   Hash,
   Key,
@@ -126,6 +127,21 @@ export const tools: ToolDefinition[] = [
     shortcutNumber: 6,
   },
   {
+    id: 'media-extract',
+    title: 'Extrator de mídia',
+    description:
+      'Analise links públicos do YouTube, Instagram, TikTok e arquivos diretos para inspecionar metadados e baixar com segurança via API interna.',
+    shortDescription: 'Extrai metadados e baixa vídeos, áudios ou imagens públicas por URL.',
+    path: '/media-extract',
+    icon: FilmStrip,
+    available: true,
+    tags: ['youtube', 'instagram', 'tiktok', 'video', 'mp4', 'audio', 'download', 'url'],
+    category: 'Arquivos',
+    processing: 'hybrid',
+    featured: true,
+    shortcutNumber: 7,
+  },
+  {
     id: 'qrcode',
     title: 'QR Code',
     description:
@@ -138,7 +154,7 @@ export const tools: ToolDefinition[] = [
     category: 'Criação',
     processing: 'local',
     featured: true,
-    shortcutNumber: 7,
+    shortcutNumber: 8,
   },
   {
     id: 'colors',
@@ -153,6 +169,6 @@ export const tools: ToolDefinition[] = [
     category: 'Criação',
     processing: 'local',
     featured: true,
-    shortcutNumber: 8,
+    shortcutNumber: 9,
   },
 ];
