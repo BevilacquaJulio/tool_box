@@ -23,12 +23,23 @@ const MEDIA_KIND_LABELS: Record<MediaKind, string> = {
   unknown: 'Mídia',
 };
 
+const MEDIA_DOWNLOAD_LABELS: Record<MediaKind, string> = {
+  video: 'Baixar vídeo',
+  audio: 'Baixar áudio',
+  image: 'Baixar imagem',
+  unknown: 'Baixar original',
+};
+
 export function getPlatformLabel(platform: MediaPlatform): string {
   return PLATFORM_LABELS[platform];
 }
 
 export function getMediaKindLabel(kind: MediaKind): string {
   return MEDIA_KIND_LABELS[kind];
+}
+
+export function getMediaDownloadLabel(kind: MediaKind): string {
+  return MEDIA_DOWNLOAD_LABELS[kind];
 }
 
 export function formatMediaDuration(seconds?: number): string | null {

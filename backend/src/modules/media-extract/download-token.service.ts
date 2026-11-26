@@ -82,14 +82,18 @@ export class DownloadTokenService {
 
     const candidate = value as Record<string, unknown>;
     return (
-      (candidate.mode === 'direct' || candidate.mode === 'ytdlp') &&
+      (candidate.mode === 'direct' ||
+        candidate.mode === 'ytdlp' ||
+        candidate.mode === 'ytdlp-audio' ||
+        candidate.mode === 'direct-audio') &&
       typeof candidate.url === 'string' &&
       candidate.url.length > 0 &&
       typeof candidate.filename === 'string' &&
       candidate.filename.length > 0 &&
       typeof candidate.exp === 'number' &&
       Number.isFinite(candidate.exp) &&
-      (candidate.formatId === undefined || typeof candidate.formatId === 'string')
+      (candidate.formatId === undefined || typeof candidate.formatId === 'string') &&
+      (candidate.contentType === undefined || typeof candidate.contentType === 'string')
     );
   }
 }

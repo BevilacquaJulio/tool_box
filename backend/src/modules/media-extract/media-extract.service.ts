@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DownloadTokenService } from './download-token.service';
-import type { DownloadResult, MediaExtractResult } from './media-extract.types';
+import type { DownloadResult, MediaExtractMode, MediaExtractResult } from './media-extract.types';
 import { assertPublicHost, detectPlatform, normalizeHttpUrl } from './media-extract.utils';
 import { PlatformExtractorsService } from './platform-extractors.service';
 import { RemoteFetchService } from './remote-fetch.service';
@@ -15,11 +15,11 @@ export class MediaExtractService {
     private readonly ytdlpService: YtdlpService,
   ) {}
 
-  async analyze(rawUrl: string): Promise<MediaExtractResult> {
+  async analyze(rawUrl: string, mode: MediaExtractMode = 'all'): Promise<MediaExtractResult> {
     const url = normalizeHttpUrl(rawUrl);
     await assertPublicHost(url);
     const platform = detectPlatform(url);
-    return this.platformExtractorsService.extract(url.toString(), platform);
+    return this.platformExtractorsService.extract(url.toString(), platform, mode);
   }
 
   async downloadByToken(token: string): Promise<DownloadResult> {
@@ -34,20 +34,43 @@ export class MediaExtractService {
       );
       return {
         stream,
-        contentType: 'application/octet-stream',
+        contentType: payload.contentType ?? 'application/octet-stream',
         filename: payload.filename,
         abort,
       };
     }
 
-    const { stream, contentType, contentLength, abort } =
-      await this.remoteFetchService.fetchBinaryStream(validatedUrl.toString());
+    if (payload.mode === 'ytdlp-audio') {
+      const { stream, abort } = this.ytdlpService.createAudioMp3Stream(
+        validatedUrl.toString(),
+        payload.formatId,
+      );
+      return {
+        stream,
+        contentType: payload.contentType ?? 'audio/mpeg',
+        filename: payload.filename,
+        abort,
+      };
+    }
+
+    const remote = await this.remoteFetchService.fetchBinaryStream(validatedUrl.toString());
+
+    if (payload.mode === 'direct-audio') {
+      const { stream, abort } = this.ytdlpService.transcodeStreamToMp3(remote.stream, remote.abort);
+      return {
+        stream,
+        contentType: payload.contentType ?? 'audio/mpeg',
+        filename: payload.filename,
+        abort,
+      };
+    }
+
     return {
-      stream,
-      contentType,
+      stream: remote.stream,
+      contentType: remote.contentType,
       filename: payload.filename,
-      contentLength,
-      abort,
+      contentLength: remote.contentLength,
+      abort: remote.abort,
     };
   }
 }

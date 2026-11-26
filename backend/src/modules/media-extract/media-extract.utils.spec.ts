@@ -104,6 +104,8 @@ describe('media-extract.utils', () => {
       );
       expect(isValidFormatId('best')).toBe(true);
       expect(isValidFormatId('137+140')).toBe(true);
+      expect(isValidFormatId('bestaudio/best')).toBe(true);
+      expect(isValidFormatId('-x')).toBe(false);
       expect(isValidFormatId('--exec=whoami')).toBe(false);
       expect(isValidFormatId('best; rm -rf /')).toBe(false);
     });

@@ -57,14 +57,22 @@ describe('App e2e', () => {
     expect(response.body.error.code).toBe('UNAUTHORIZED');
   });
 
-  it('POST /api/media-extract/analyze rejects empty URL', async () => {
-    const response = await request(app.getHttpServer())
+  it('POST /api/media-extract/analyze rejects empty URL and invalid mode', async () => {
+    const emptyUrl = await request(app.getHttpServer())
       .post('/api/media-extract/analyze')
       .set('x-internal-api-key', TEST_API_KEY)
       .send({ url: '   ' })
       .expect(400);
 
-    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(emptyUrl.body.error.code).toBe('VALIDATION_ERROR');
+
+    const invalidMode = await request(app.getHttpServer())
+      .post('/api/media-extract/analyze')
+      .set('x-internal-api-key', TEST_API_KEY)
+      .send({ url: 'https://example.com/video.mp4', mode: 'invalid' })
+      .expect(400);
+
+    expect(invalidMode.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('GET /api/media-extract/download/:token requires internal key and rejects tampered tokens', async () => {

@@ -2,6 +2,8 @@ import type { Readable } from 'node:stream';
 
 export type MediaPlatform = 'youtube' | 'instagram' | 'tiktok' | 'direct' | 'generic';
 export type MediaKind = 'video' | 'audio' | 'image' | 'unknown';
+export type MediaExtractMode = 'all' | 'audio';
+export type DownloadTokenMode = 'direct' | 'ytdlp' | 'ytdlp-audio' | 'direct-audio';
 
 export type MediaExtractItem = {
   id: string;
@@ -10,6 +12,7 @@ export type MediaExtractItem = {
   mediaType: MediaKind;
   extension?: string;
   resolution?: string;
+  bitrateLabel?: string;
   durationSeconds?: number;
   sizeBytes?: number;
   sizeLabel?: string;
@@ -23,15 +26,17 @@ export type MediaExtractItem = {
 export type MediaExtractResult = {
   sourceUrl: string;
   platform: MediaPlatform;
+  mode: MediaExtractMode;
   pageTitle?: string;
   items: MediaExtractItem[];
 };
 
 export type DownloadTokenPayload = {
-  mode: 'direct' | 'ytdlp';
+  mode: DownloadTokenMode;
   url: string;
   filename: string;
   formatId?: string;
+  contentType?: string;
   exp: number;
 };
 
@@ -48,6 +53,8 @@ export type YtdlpFormat = {
   ext?: string;
   height?: number;
   width?: number;
+  abr?: number;
+  tbr?: number;
   filesize?: number;
   filesize_approx?: number;
   vcodec?: string;

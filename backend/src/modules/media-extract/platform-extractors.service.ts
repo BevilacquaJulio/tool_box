@@ -5,10 +5,12 @@ import type { EnvConfig } from '../../config/env.validation';
 import { DownloadTokenService } from './download-token.service';
 import type {
   MediaExtractItem,
+  MediaExtractMode,
   MediaExtractResult,
   MediaPlatform,
   OEmbedResponse,
   YouTubeApiVideoResponse,
+  YtdlpInfo,
 } from './media-extract.types';
 import {
   buildResolution,
@@ -20,10 +22,18 @@ import {
   sanitizeFilename,
 } from './media-extract.utils';
 import { RemoteFetchService } from './remote-fetch.service';
-import { buildYtdlpFilename, pickBestFormat, YtdlpService } from './ytdlp.service';
+import {
+  buildYtdlpFilename,
+  guessAudioContentType,
+  pickBestAudioFormat,
+  pickBestFormat,
+  YtdlpService,
+} from './ytdlp.service';
 
 const YTDLP_FALLBACK_MESSAGE =
   'Configure o yt-dlp no servidor para habilitar o download direto desta plataforma.';
+const FFMPEG_AUDIO_FALLBACK_MESSAGE =
+  'Esta mídia não expõe faixa de áudio separada. Instale o ffmpeg no servidor para extrair o áudio em MP3.';
 
 @Injectable()
 export class PlatformExtractorsService {
@@ -36,30 +46,37 @@ export class PlatformExtractorsService {
     private readonly configService: ConfigService<EnvConfig, true>,
   ) {}
 
-  async extract(sourceUrl: string, platform: MediaPlatform): Promise<MediaExtractResult> {
+  async extract(
+    sourceUrl: string,
+    platform: MediaPlatform,
+    mode: MediaExtractMode = 'all',
+  ): Promise<MediaExtractResult> {
     switch (platform) {
       case 'youtube':
         return this.extractStreamingPlatform(
           sourceUrl,
           platform,
           this.getYouTubeOEmbedUrl(sourceUrl),
+          mode,
         );
       case 'instagram':
         return this.extractStreamingPlatform(
           sourceUrl,
           platform,
           this.getInstagramOEmbedUrl(sourceUrl),
+          mode,
         );
       case 'tiktok':
         return this.extractStreamingPlatform(
           sourceUrl,
           platform,
           this.getTikTokOEmbedUrl(sourceUrl),
+          mode,
         );
       case 'direct':
-        return this.extractDirectMedia(sourceUrl);
+        return this.extractDirectMedia(sourceUrl, mode);
       default:
-        return this.extractGeneric(sourceUrl);
+        return this.extractGeneric(sourceUrl, mode);
     }
   }
 
@@ -67,73 +84,83 @@ export class PlatformExtractorsService {
     sourceUrl: string,
     platform: MediaPlatform,
     oEmbedUrl: string,
+    mode: MediaExtractMode,
   ): Promise<MediaExtractResult> {
-    const ytdlpResult = await this.tryAnalyzeWithYtdlp(sourceUrl, platform);
+    const ytdlpResult = await this.tryAnalyzeWithYtdlp(sourceUrl, platform, mode);
     if (ytdlpResult) {
       return ytdlpResult;
     }
 
-    return this.extractWithOEmbed(sourceUrl, platform, oEmbedUrl);
+    return this.extractWithOEmbed(sourceUrl, platform, oEmbedUrl, mode);
   }
 
   private async tryAnalyzeWithYtdlp(
     sourceUrl: string,
     platform: MediaPlatform,
+    mode: MediaExtractMode,
   ): Promise<MediaExtractResult | null> {
     try {
       const info = await this.ytdlpService.getInfo(sourceUrl);
-      const bestFormat = pickBestFormat(info);
+      const ffmpegAvailable = await this.ytdlpService.isFfmpegAvailable();
       const title = info.title ?? 'Mídia';
       const pageTitle = info.title;
       const openUrl = info.webpage_url ?? sourceUrl;
       const durationSeconds = info.duration;
       const items: MediaExtractItem[] = [];
 
-      const extension = bestFormat?.ext ?? info.ext ?? 'mp4';
-      const resolution = buildResolution(
-        bestFormat?.width ?? info.width,
-        bestFormat?.height ?? info.height,
-      );
-      const sizeBytes = bestFormat?.filesize ?? bestFormat?.filesize_approx ?? info.filesize;
+      if (mode === 'all') {
+        const bestFormat = pickBestFormat(info);
+        const extension = bestFormat?.ext ?? info.ext ?? 'mp4';
+        const resolution = buildResolution(
+          bestFormat?.width ?? info.width,
+          bestFormat?.height ?? info.height,
+        );
+        const sizeBytes = bestFormat?.filesize ?? bestFormat?.filesize_approx ?? info.filesize;
+        const filename = buildYtdlpFilename(title, extension);
 
-      const filename = buildYtdlpFilename(title, extension);
-      const downloadToken = this.downloadTokenService.create({
-        mode: 'ytdlp',
-        url: sourceUrl,
-        filename,
-        formatId: bestFormat?.format_id ?? 'best',
-      });
+        items.push({
+          id: randomUUID(),
+          title,
+          thumbnailUrl: info.thumbnail,
+          mediaType: 'video',
+          extension,
+          resolution,
+          durationSeconds,
+          sizeBytes,
+          sizeLabel: sizeBytes ? formatBytes(sizeBytes) : undefined,
+          downloadable: true,
+          originalUrl: sourceUrl,
+          openUrl,
+          downloadToken: this.downloadTokenService.create({
+            mode: 'ytdlp',
+            url: sourceUrl,
+            filename,
+            formatId: bestFormat?.format_id ?? 'best',
+            contentType: extension === 'webm' ? 'video/webm' : 'video/mp4',
+          }),
+        });
+      }
 
-      items.push({
-        id: randomUUID(),
-        title,
-        thumbnailUrl: info.thumbnail,
-        mediaType: 'video',
-        extension,
-        resolution,
-        durationSeconds,
-        sizeBytes,
-        sizeLabel: sizeBytes ? formatBytes(sizeBytes) : undefined,
-        downloadable: true,
-        originalUrl: sourceUrl,
-        openUrl,
-        downloadToken,
-      });
+      const audioItem = this.buildAudioItem(info, sourceUrl, openUrl, title, ffmpegAvailable);
+      if (audioItem && (mode === 'audio' || audioItem.downloadable)) {
+        items.push(audioItem);
+      }
 
-      if (info.thumbnail) {
+      if (mode === 'all' && info.thumbnail) {
         const thumbnailItem = await this.buildThumbnailItem(info.thumbnail, title, openUrl);
         if (thumbnailItem) {
           items.push(thumbnailItem);
         }
       }
 
-      if (platform === 'youtube') {
-        await this.enrichYouTubeItem(items[0], sourceUrl);
+      if (platform === 'youtube' && items.length > 0) {
+        await this.enrichYouTubeItems(items, sourceUrl);
       }
 
       return {
         sourceUrl,
         platform,
+        mode,
         pageTitle,
         items,
       };
@@ -144,7 +171,86 @@ export class PlatformExtractorsService {
     }
   }
 
-  private async enrichYouTubeItem(item: MediaExtractItem, sourceUrl: string): Promise<void> {
+  private buildAudioItem(
+    info: YtdlpInfo,
+    sourceUrl: string,
+    openUrl: string,
+    title: string,
+    ffmpegAvailable: boolean,
+  ): MediaExtractItem {
+    const bestAudio = pickBestAudioFormat(info);
+    const bitrateKbps = bestAudio?.abr ?? bestAudio?.tbr;
+    const bitrateLabel =
+      bitrateKbps && bitrateKbps > 0 ? `${Math.round(bitrateKbps)} kbps` : undefined;
+
+    // Com ffmpeg instalado no servidor, converte sempre para MP3 (funciona inclusive em vídeos sem trilha de áudio separada).
+    if (ffmpegAvailable) {
+      const filename = buildYtdlpFilename(`${title} (audio)`, 'mp3');
+      return {
+        id: randomUUID(),
+        title: `${title} (somente áudio)`,
+        thumbnailUrl: info.thumbnail,
+        mediaType: 'audio',
+        extension: 'mp3',
+        bitrateLabel: bitrateLabel ?? 'MP3',
+        durationSeconds: info.duration,
+        downloadable: true,
+        originalUrl: sourceUrl,
+        openUrl,
+        downloadToken: this.downloadTokenService.create({
+          mode: 'ytdlp-audio',
+          url: sourceUrl,
+          filename,
+          formatId: bestAudio?.format_id ?? 'bestaudio/best',
+          contentType: 'audio/mpeg',
+        }),
+      };
+    }
+
+    // Sem ffmpeg: usa diretamente a melhor trilha somente-áudio nativa oferecida pelo yt-dlp (ex.: m4a/webm).
+    if (bestAudio?.format_id) {
+      const extension = bestAudio.ext ?? 'm4a';
+      const sizeBytes = bestAudio.filesize ?? bestAudio.filesize_approx;
+      const filename = buildYtdlpFilename(`${title} (audio)`, extension);
+
+      return {
+        id: randomUUID(),
+        title: `${title} (somente áudio)`,
+        thumbnailUrl: info.thumbnail,
+        mediaType: 'audio',
+        extension,
+        bitrateLabel,
+        durationSeconds: info.duration,
+        sizeBytes,
+        sizeLabel: sizeBytes ? formatBytes(sizeBytes) : undefined,
+        downloadable: true,
+        originalUrl: sourceUrl,
+        openUrl,
+        downloadToken: this.downloadTokenService.create({
+          mode: 'ytdlp',
+          url: sourceUrl,
+          filename,
+          formatId: bestAudio.format_id,
+          contentType: guessAudioContentType(extension),
+        }),
+      };
+    }
+
+    return {
+      id: randomUUID(),
+      title: `${title} (somente áudio)`,
+      thumbnailUrl: info.thumbnail,
+      mediaType: 'audio',
+      extension: 'mp3',
+      durationSeconds: info.duration,
+      downloadable: false,
+      restrictionReason: FFMPEG_AUDIO_FALLBACK_MESSAGE,
+      originalUrl: sourceUrl,
+      openUrl,
+    };
+  }
+
+  private async enrichYouTubeItems(items: MediaExtractItem[], sourceUrl: string): Promise<void> {
     const apiKey = this.configService.get('YOUTUBE_API_KEY', { infer: true });
     const videoId = extractYouTubeVideoId(new URL(sourceUrl));
     if (!apiKey || !videoId) {
@@ -159,14 +265,22 @@ export class PlatformExtractorsService {
         return;
       }
 
-      if (video.contentDetails?.duration) {
-        item.durationSeconds = parseIso8601Duration(video.contentDetails.duration);
-      }
-
+      const durationSeconds = video.contentDetails?.duration
+        ? parseIso8601Duration(video.contentDetails.duration)
+        : undefined;
       const thumbnail =
         video.snippet?.thumbnails?.high?.url ?? video.snippet?.thumbnails?.medium?.url;
-      if (thumbnail) {
-        item.thumbnailUrl = thumbnail;
+
+      for (const item of items) {
+        if (item.mediaType === 'image') {
+          continue;
+        }
+        if (durationSeconds !== undefined) {
+          item.durationSeconds = durationSeconds;
+        }
+        if (thumbnail) {
+          item.thumbnailUrl = thumbnail;
+        }
       }
     } catch {
       this.logger.warn('Fallback da YouTube Data API indisponível para este vídeo.');
@@ -177,6 +291,7 @@ export class PlatformExtractorsService {
     sourceUrl: string,
     platform: MediaPlatform,
     oEmbedUrl: string,
+    mode: MediaExtractMode,
   ): Promise<MediaExtractResult> {
     let oEmbed: OEmbedResponse | null = null;
 
@@ -190,10 +305,10 @@ export class PlatformExtractorsService {
     const items: MediaExtractItem[] = [
       {
         id: randomUUID(),
-        title,
+        title: mode === 'audio' ? `${title} (somente áudio)` : title,
         thumbnailUrl: oEmbed?.thumbnail_url,
-        mediaType: 'video',
-        extension: 'mp4',
+        mediaType: mode === 'audio' ? 'audio' : 'video',
+        extension: mode === 'audio' ? 'mp3' : 'mp4',
         downloadable: false,
         restrictionReason: YTDLP_FALLBACK_MESSAGE,
         originalUrl: sourceUrl,
@@ -201,7 +316,7 @@ export class PlatformExtractorsService {
       },
     ];
 
-    if (oEmbed?.thumbnail_url) {
+    if (mode === 'all' && oEmbed?.thumbnail_url) {
       const thumbnailItem = await this.buildThumbnailItem(oEmbed.thumbnail_url, title, sourceUrl);
       if (thumbnailItem) {
         items.push(thumbnailItem);
@@ -211,6 +326,7 @@ export class PlatformExtractorsService {
     return {
       sourceUrl,
       platform,
+      mode,
       pageTitle: title,
       items,
     };
@@ -258,9 +374,13 @@ export class PlatformExtractorsService {
     }
   }
 
-  private async extractDirectMedia(sourceUrl: string): Promise<MediaExtractResult> {
+  private async extractDirectMedia(
+    sourceUrl: string,
+    mode: MediaExtractMode,
+  ): Promise<MediaExtractResult> {
     const probe = await this.remoteFetchService.probe(sourceUrl);
-    const url = new URL(probe.finalUrl || sourceUrl);
+    const resolvedUrl = probe.finalUrl || sourceUrl;
+    const url = new URL(resolvedUrl);
     const extension = getExtensionFromPath(url.pathname) ?? 'bin';
     const segment = url.pathname.split('/').pop() ?? 'download';
     const baseName =
@@ -270,36 +390,87 @@ export class PlatformExtractorsService {
     const filename = sanitizeFilename(baseName || 'download', extension);
     const mediaType = detectMediaKind(probe.contentType, extension);
 
+    const items: MediaExtractItem[] = [];
+
+    if (mode === 'all' || mediaType === 'audio') {
+      items.push({
+        id: randomUUID(),
+        title: filename,
+        thumbnailUrl: mediaType === 'image' ? resolvedUrl : undefined,
+        mediaType,
+        extension,
+        sizeBytes: probe.contentLength,
+        sizeLabel: probe.contentLength ? formatBytes(probe.contentLength) : undefined,
+        downloadable: true,
+        originalUrl: resolvedUrl,
+        openUrl: resolvedUrl,
+        downloadToken: this.downloadTokenService.create({
+          mode: 'direct',
+          url: resolvedUrl,
+          filename,
+        }),
+      });
+    }
+
+    if (mediaType === 'video') {
+      const ffmpegAvailable = await this.ytdlpService.isFfmpegAvailable();
+      if (ffmpegAvailable) {
+        const audioFilename = sanitizeFilename(`${baseName || 'audio'}-audio`, 'mp3');
+        items.push({
+          id: randomUUID(),
+          title: `${baseName || 'Mídia'} (somente áudio)`,
+          mediaType: 'audio',
+          extension: 'mp3',
+          bitrateLabel: 'MP3',
+          downloadable: true,
+          originalUrl: resolvedUrl,
+          openUrl: resolvedUrl,
+          downloadToken: this.downloadTokenService.create({
+            mode: 'direct-audio',
+            url: resolvedUrl,
+            filename: audioFilename,
+            contentType: 'audio/mpeg',
+          }),
+        });
+      } else if (mode === 'audio') {
+        items.push({
+          id: randomUUID(),
+          title: `${baseName || 'Mídia'} (somente áudio)`,
+          mediaType: 'audio',
+          extension: 'mp3',
+          downloadable: false,
+          restrictionReason: FFMPEG_AUDIO_FALLBACK_MESSAGE,
+          originalUrl: resolvedUrl,
+          openUrl: resolvedUrl,
+        });
+      }
+    } else if (mode === 'audio' && mediaType !== 'audio') {
+      items.push({
+        id: randomUUID(),
+        title: filename,
+        mediaType,
+        extension,
+        downloadable: false,
+        restrictionReason: 'O link informado não contém áudio para extração.',
+        originalUrl: resolvedUrl,
+        openUrl: resolvedUrl,
+      });
+    }
+
     return {
       sourceUrl,
       platform: 'direct',
+      mode,
       pageTitle: filename,
-      items: [
-        {
-          id: randomUUID(),
-          title: filename,
-          thumbnailUrl: mediaType === 'image' ? probe.finalUrl || sourceUrl : undefined,
-          mediaType,
-          extension,
-          sizeBytes: probe.contentLength,
-          sizeLabel: probe.contentLength ? formatBytes(probe.contentLength) : undefined,
-          downloadable: true,
-          originalUrl: probe.finalUrl || sourceUrl,
-          openUrl: probe.finalUrl || sourceUrl,
-          downloadToken: this.downloadTokenService.create({
-            mode: 'direct',
-            url: probe.finalUrl || sourceUrl,
-            filename,
-          }),
-        },
-      ],
+      items,
     };
   }
 
-  private extractGeneric(sourceUrl: string): MediaExtractResult {
+  private extractGeneric(sourceUrl: string, mode: MediaExtractMode): MediaExtractResult {
     return {
       sourceUrl,
       platform: 'generic',
+      mode,
       pageTitle: 'Link genérico',
       items: [
         {
