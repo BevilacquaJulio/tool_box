@@ -135,7 +135,7 @@ export const tools: ToolDefinition[] = [
     path: '/media-extract',
     icon: FilmStrip,
     available: true,
-    tags: ['youtube', 'instagram', 'tiktok', 'video', 'mp4', 'audio', 'download', 'url'],
+    tags: ['youtube', 'instagram', 'tiktok', 'video', 'mp4', 'audio', 'mp3', 'download', 'url'],
     category: 'Arquivos',
     processing: 'hybrid',
     featured: true,

@@ -29,7 +29,7 @@ const BLOCKED_HOSTNAMES = new Set([
   'instance-data',
 ]);
 
-const SAFE_FORMAT_ID_PATTERN = /^[A-Za-z0-9._+-]{1,64}$/;
+const SAFE_FORMAT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._+/-]{0,63}$/;
 
 export function normalizeHttpUrl(raw: string): URL {
   const trimmed = raw.trim();

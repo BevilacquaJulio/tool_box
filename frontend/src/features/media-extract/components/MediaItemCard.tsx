@@ -8,7 +8,11 @@ import {
 } from '@phosphor-icons/react';
 import { StudioAlert } from '../../../components/PageShell';
 import { getMediaDownloadUrl } from '../../../lib/api';
-import { formatMediaDuration, getMediaKindLabel } from '../../../lib/media-extract/format';
+import {
+  formatMediaDuration,
+  getMediaDownloadLabel,
+  getMediaKindLabel,
+} from '../../../lib/media-extract/format';
 import type { MediaExtractItem } from '../media-extract.types';
 
 type MediaItemCardProps = {
@@ -37,6 +41,7 @@ function MediaTypeIcon({
 export function MediaItemCard({ item }: MediaItemCardProps) {
   const duration = formatMediaDuration(item.durationSeconds);
   const kindLabel = getMediaKindLabel(item.mediaType);
+  const downloadLabel = getMediaDownloadLabel(item.mediaType);
 
   return (
     <article className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-subtle)] p-3.5 transition-colors duration-150 hover:border-[var(--border-strong)]">
@@ -70,7 +75,11 @@ export function MediaItemCard({ item }: MediaItemCardProps) {
               {item.title}
             </h3>
 
-            {(item.extension || item.resolution || duration || item.sizeLabel) && (
+            {(item.extension ||
+              item.resolution ||
+              item.bitrateLabel ||
+              duration ||
+              item.sizeLabel) && (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {item.extension && (
                   <span className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-2 py-0.5 font-mono text-[11px] uppercase text-[var(--ink-secondary)]">
@@ -80,6 +89,11 @@ export function MediaItemCard({ item }: MediaItemCardProps) {
                 {item.resolution && (
                   <span className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-2 py-0.5 font-mono text-[11px] text-[var(--ink-secondary)]">
                     {item.resolution}
+                  </span>
+                )}
+                {item.bitrateLabel && (
+                  <span className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-2 py-0.5 font-mono text-[11px] text-[var(--ink-secondary)]">
+                    {item.bitrateLabel}
                   </span>
                 )}
                 {duration && (
@@ -108,7 +122,7 @@ export function MediaItemCard({ item }: MediaItemCardProps) {
                 className="focus-ring inline-flex min-h-9 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-[var(--accent)] bg-[var(--accent)] px-3.5 py-2 text-xs font-semibold text-[var(--accent-contrast)] transition-colors hover:bg-[var(--accent-hover)] active:scale-[0.985]"
               >
                 <DownloadSimple size={15} weight="bold" aria-hidden="true" />
-                Baixar original
+                {downloadLabel}
               </a>
             )}
 

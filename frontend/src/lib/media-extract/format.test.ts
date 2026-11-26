@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { formatMediaDuration, getMediaKindLabel, getPlatformLabel } from './format';
+import {
+  formatMediaDuration,
+  getMediaDownloadLabel,
+  getMediaKindLabel,
+  getPlatformLabel,
+} from './format';
 
 describe('media-extract format helpers', () => {
   it('formata duração em minutos e horas corretamente', () => {
@@ -10,7 +15,7 @@ describe('media-extract format helpers', () => {
     expect(formatMediaDuration(-5)).toBeNull();
   });
 
-  it('retorna rótulos em português para plataformas e tipos de mídia', () => {
+  it('retorna rótulos em português para plataformas, tipos e ação de download', () => {
     expect(getPlatformLabel('youtube')).toBe('YouTube');
     expect(getPlatformLabel('direct')).toBe('Arquivo direto');
     expect(getPlatformLabel('generic')).toBe('Link genérico');
@@ -18,5 +23,8 @@ describe('media-extract format helpers', () => {
     expect(getMediaKindLabel('audio')).toBe('Áudio');
     expect(getMediaKindLabel('image')).toBe('Imagem');
     expect(getMediaKindLabel('unknown')).toBe('Mídia');
+    expect(getMediaDownloadLabel('audio')).toBe('Baixar áudio');
+    expect(getMediaDownloadLabel('video')).toBe('Baixar vídeo');
+    expect(getMediaDownloadLabel('image')).toBe('Baixar imagem');
   });
 });

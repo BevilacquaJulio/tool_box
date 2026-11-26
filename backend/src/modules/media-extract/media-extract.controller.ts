@@ -14,7 +14,7 @@ export class MediaExtractController {
   @Post('analyze')
   @HttpCode(HttpStatus.OK)
   analyze(@Body() body: AnalyzeMediaDto) {
-    return this.mediaExtractService.analyze(body.url);
+    return this.mediaExtractService.analyze(body.url, body.mode);
   }
 
   @Get('download/:token')
